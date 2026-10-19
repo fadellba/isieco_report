@@ -1,0 +1,40 @@
+{
+  "name": "@isieco/api",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Backend API REST Fastify + TypeScript pour ISI-Eco Report",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "migrate:pg": "tsx src/db/migrator.ts",
+    "seed:pg": "tsx src/db/seeds/seed_personas.ts",
+    "seed:demo": "tsx src/db/seeds/seed_demo_data.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^10.0.1",
+    "@fastify/cors": "^10.0.1",
+    "@fastify/multipart": "^9.0.3",
+    "@fastify/swagger": "^9.5.1",
+    "@fastify/swagger-ui": "^6.1.2",
+    "@isieco/shared": "*",
+    "@node-rs/argon2": "^1.8.3",
+    "dotenv": "^16.4.5",
+    "fastify": "^5.12.7",
+    "pg": "^8.13.0",
+    "sharp": "^0.35.5",
+    "vite": "^6.4.3",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.11"
+  }
+}

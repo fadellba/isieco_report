@@ -1,0 +1,182 @@
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
+import { mobileApi } from '../../services/api.js';
+import { NotificationItem } from '../../types/index.js';
+
+export const NotificationsScreen: React.FC = () => {
+  const [notifs, setNotifs] = useState<NotificationItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchNotifs = async () => {
+    try {
+      const data = await mobileApi.notifications.getMine();
+      setNotifs(data.data || []);
+    } catch {
+      // offline fallback
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifs();
+  }, []);
+
+  const handleMarkAsRead = async (id: string) => {
+    try {
+      await mobileApi.notifications.markAsRead(id);
+      setNotifs(notifs.map((n) => (n.idNotification === id ? { ...n, lu: true } : n)));
+    } catch {
+      // ignore
+    }
+  };
+
+  const unreadCount = notifs.filter((n) => !n.lu).length;
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.headerRow}>
+        <Text style={styles.headerTitle}>Centre de Notifications</Text>
+        {unreadCount > 0 && (
+          <View style={styles.unreadBadge}>
+            <Text style={styles.unreadText}>{unreadCount} non lue(s)</Text>
+          </View>
+        )}
+      </View>
+
+      {loading ? (
+        <ActivityIndicator style={{ marginTop: 40 }} size="large" color="#16a34a" />
+      ) : (
+        <FlatList
+          data={notifs}
+          keyExtractor={(item) => item.idNotification}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                fetchNotifs();
+              }}
+              colors={['#16a34a']}
+            />
+          }
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Text style={styles.emptyText}>Aucune notification récente.</Text>
+            </View>
+          }
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              style={[styles.notifCard, !item.lu && styles.notifCardUnread]}
+              onPress={() => !item.lu && handleMarkAsRead(item.idNotification)}
+            >
+              <View style={styles.notifHeader}>
+                <Text style={[styles.notifTitle, !item.lu && styles.notifTitleBold]}>
+                  {!item.lu ? '● ' : ''}
+                  {item.titre}
+                </Text>
+                <Text style={styles.notifDate}>
+                  {new Date(item.dateCreation).toLocaleDateString('fr-SN', {
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </Text>
+              </View>
+
+              <Text style={styles.notifMessage}>{item.message}</Text>
+            </TouchableOpacity>
+          )}
+        />
+      )}
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    padding: 16,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  unreadBadge: {
+    backgroundColor: '#dbeafe',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  unreadText: {
+    color: '#1d4ed8',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  list: {
+    gap: 8,
+  },
+  notifCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  notifCardUnread: {
+    borderColor: '#93c5fd',
+    backgroundColor: '#f0fdf4',
+  },
+  notifHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  notifTitle: {
+    fontSize: 13,
+    color: '#334155',
+    flex: 1,
+  },
+  notifTitleBold: {
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  notifDate: {
+    fontSize: 10,
+    color: '#94a3b8',
+  },
+  notifMessage: {
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 16,
+  },
+  empty: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 12,
+    color: '#94a3b8',
+  },
+});

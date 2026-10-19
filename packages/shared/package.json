@@ -1,0 +1,26 @@
+{
+  "name": "@isieco/shared",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Shared Zod schemas, DTOs, and domain enums for ISI-Eco Report",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"Shared package typechecked successfully\""
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

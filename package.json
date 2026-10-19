@@ -1,0 +1,35 @@
+{
+  "name": "isi-eco-report-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ISI-Eco Report — Plateforme participative de gestion et traçabilité des déchets (Dakar)",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run --workspace=@isieco/api dev",
+    "dev:web": "npm run --workspace=@isieco/web dev",
+    "dev:mobile": "npm run --workspace=@isieco/mobile start",
+    "test:api": "npm run --workspace=@isieco/api test",
+    "build:web": "npm run --workspace=@isieco/web build",
+    "typecheck": "npm run --workspaces --if-present typecheck",
+    "build": "npm run --workspaces --if-present build",
+    "test": "npm run --workspaces --if-present test",
+    "lint": "npm run --workspaces --if-present lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": "^22.13.0 || ^24.3.0 || >=26.0.0"
+  },
+  "overrides": {
+    "@expo/cli": {
+      "tar": "^7.5.22"
+    },
+    "xcode": {
+      "uuid": "^11.1.1"
+    }
+  }
+}
