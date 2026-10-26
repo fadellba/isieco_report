@@ -66,7 +66,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const hasAnyRole = (roles: RoleCode[]) => {
     if (!user) return false;
-    if (user.roles.includes(RoleCode.ADMIN)) return true; // Admin a accès transversal
     return roles.some((r) => user.roles.includes(r));
   };
 

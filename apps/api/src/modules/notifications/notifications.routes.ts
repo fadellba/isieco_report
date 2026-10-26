@@ -1,7 +1,16 @@
 import { FastifyPluginAsync } from 'fastify';
-import { getDb } from '../../db/index.js';
+import {
+  getUserNotifications,
+  markUserNotificationAsRead,
+} from '../../application/use-cases/notifications.js';
 
 export const notificationsRoutes: FastifyPluginAsync = async (fastify) => {
+  const repository = fastify.dependencies.notifications;
+  const listNotifications = async (idUtilisateur: string) => ({
+    success: true,
+    ...await getUserNotifications(repository, idUtilisateur),
+  });
+
   // Liste des notifications du compte connecté
   fastify.get('/', {
     preHandler: [fastify.authenticate],
@@ -36,24 +45,7 @@ export const notificationsRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
   }, async (req) => {
-    const db = getDb();
-    const rows = await db.query(
-      `SELECT id_notification as "idNotification", titre, message, lu, 
-              date_creation as "dateCreation", lien_cible as "lienCible"
-       FROM notification
-       WHERE id_utilisateur = $1
-       ORDER BY date_creation DESC LIMIT 50`,
-      [req.user!.idUtilisateur]
-    );
-
-    const nonLues = rows.filter((r) => !r.lu).length;
-
-    return {
-      success: true,
-      count: rows.length,
-      nonLues,
-      data: rows,
-    };
+    return listNotifications(req.user!.idUtilisateur);
   });
 
   fastify.get('/mes-notifications', {
@@ -89,24 +81,7 @@ export const notificationsRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
   }, async (req) => {
-    const db = getDb();
-    const rows = await db.query(
-      `SELECT id_notification as "idNotification", titre, message, lu, 
-              date_creation as "dateCreation", lien_cible as "lienCible"
-       FROM notification
-       WHERE id_utilisateur = $1
-       ORDER BY date_creation DESC LIMIT 50`,
-      [req.user!.idUtilisateur]
-    );
-
-    const nonLues = rows.filter((r) => !r.lu).length;
-
-    return {
-      success: true,
-      count: rows.length,
-      nonLues,
-      data: rows,
-    };
+    return listNotifications(req.user!.idUtilisateur);
   });
 
   // Marquer une notification comme lue
@@ -136,14 +111,8 @@ export const notificationsRoutes: FastifyPluginAsync = async (fastify) => {
     },
   }, async (req) => {
     const { id } = req.params as { id: string };
-    const db = getDb();
-
-    await db.execute(
-      `UPDATE notification SET lu = TRUE WHERE id_notification = $1 AND id_utilisateur = $2`,
-      [id, req.user!.idUtilisateur]
-    );
+    await markUserNotificationAsRead(repository, id, req.user!.idUtilisateur);
 
     return { success: true, message: 'Notification marquée comme lue.' };
   });
 };
-

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,12 +8,16 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Logo } from '../../components/Logo.js';
+import { useTheme } from '../../context/ThemeContext.js';
+import type { DesignTokens } from '@isieco/shared';
 
 interface SplashScreenProps {
   onFinish: () => void;
 }
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
+  const { colors, theme } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.85)).current;
 
@@ -62,7 +66,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
           },
         ]}
       >
-        <Logo size="large" showSubtitle={true} />
+        <Logo size="large" showSubtitle={true} tone={theme === 'dark' ? 'dark' : 'light'} />
 
         <View style={styles.versionBox}>
           <Text style={styles.versionText}>Plateforme Municipale Participative v2.13</Text>
@@ -70,7 +74,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
         </View>
 
         <View style={styles.spinnerRow}>
-          <ActivityIndicator size="small" color="#16a34a" />
+          <ActivityIndicator size="small" color={colors.primary} />
           <Text style={styles.spinnerText}>Initialisation du terminal nomade...</Text>
         </View>
       </Animated.View>
@@ -80,17 +84,17 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onFinish }) => {
 
 const { width } = Dimensions.get('window');
 
-const styles = StyleSheet.create({
+const createStyles = (colors: DesignTokens) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
   bgCircle: {
     position: 'absolute',
     borderRadius: 500,
-    backgroundColor: '#f0fdf4',
+    backgroundColor: colors.primarySubtle,
   },
   circle1: {
     width: width * 1.2,
@@ -116,11 +120,11 @@ const styles = StyleSheet.create({
   versionText: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#0f172a',
+    color: colors.textPrimary,
   },
   subText: {
     fontSize: 10,
-    color: '#64748b',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   spinnerRow: {
@@ -128,17 +132,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     marginTop: 40,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.surface,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.border,
   },
   spinnerText: {
     fontSize: 11,
-    color: '#64748b',
+    color: colors.textSecondary,
     fontWeight: '600',
   },
 });
-

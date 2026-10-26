@@ -1,8 +1,8 @@
 ---
 title: Règles de gestion
 project: ISI-Eco Report
-version: 2.10
-status: Règles cibles proposées — confirmation métier requise
+version: 2.11
+status: Règles cibles du scénario académique — validation d’un opérateur réel requise
 ---
 
 # Règles de gestion
@@ -85,7 +85,10 @@ Si un dépôt réapparaît après résolution, l’organisme décide si une nouv
 Tout dossier traité doit relever du périmètre fonctionnel du système et être validé par un responsable habilité avant affectation. Un cas hors périmètre ne doit pas être affecté arbitrairement : la décision de mise en attente ou de transfert externe est tracée. Pour un transfert, un événement lié au dossier conserve le libellé du destinataire, l’acteur, la date et le motif ; le modèle ne gère pas les étapes internes du destinataire.
 
 ### RG24 — Priorité
-La priorité est attribuée selon des critères partagés et maintenus par un responsable métier habilité. Toute modification de priorité est horodatée et conserve sa justification lorsqu’elle est requise.
+La priorité initiale est enregistrée à la création du dossier. Elle est définie selon des critères partagés et maintenus par un responsable habilité. Une modification par un responsable habilité est justifiée, horodatée et conserve la valeur définie et son auteur dans l’historique ainsi que les valeurs avant/après dans le journal métier. Une requête sans changement de valeur ne crée pas de nouvelle entrée.
+
+### RG24a — Correction de localisation
+La localisation initiale est historisée lorsqu’elle est renseignée. Une correction est réservée aux responsables habilités, conserve une paire de coordonnées valide ou une description textuelle non vide, et enregistre le motif, l’auteur, la date et le nouvel instantané. Le journal métier conserve aussi les valeurs avant/après ; une requête sans changement de valeur ne crée pas de nouvelle entrée.
 
 ### RG25 — Cas à risque ou nécessitant une orientation spécialisée
 Un dossier impliquant des déchets potentiellement dangereux ou une catégorie spécialisée n’est pas affecté à une équipe sans compétence valide pour la catégorie concernée. Si aucun circuit compétent n’est défini dans le scénario, le dossier est mis en attente avec un motif plutôt que d’être affecté arbitrairement.
@@ -146,28 +149,28 @@ Les photos d’intervention sont facultatives ou conditionnelles selon la politi
 La fin déclarée par l'équipe et la vérification de résolution sont distinctes. Chaque vérification concerne une affectation, laquelle ne porte que sur une catégorie. La personne habilitée, la date, le résultat, les preuves utiles et le motif éventuel sont conservés. Les vérifications antérieures ne sont pas écrasées.
 
 ### RG42 — Clôture du dossier complet
-Le dossier ne peut être déclaré entièrement résolu que lorsque chaque catégorie à traiter possède une affectation terminée après vérification positive. Une catégorie partiellement traitée ou non confirmée empêche la résolution complète, sauf clôture exceptionnelle explicitement autorisée et motivée. L'ajout d'une nouvelle catégorie après clôture exige une réouverture tracée.
+Le dossier ne peut être déclaré entièrement résolu que lorsque chaque catégorie à traiter possède une affectation terminée après vérification positive. Une catégorie partiellement traitée ou non confirmée empêche la résolution complète, sauf clôture exceptionnelle explicitement autorisée et motivée. L'ajout d'une nouvelle catégorie, la création d'une affectation ou une réaffectation après clôture exigent une réouverture tracée. La clôture résolue reste une commande explicite, même lorsque tous les volets sont `TERMINEE`.
 
 ### RG43 — Réouverture
-Une réouverture autorisée depuis un dossier clôturé produit l’événement `DOSSIER_REOUVERT`, avec état précédent, auteur, date et motif, puis place le statut courant à `A_QUALIFIER`. `REOUVERT` n’est pas un état durable. L’état et les vérifications antérieures ne sont pas effacés. Si le traitement d’une catégorie déjà vérifiée positivement doit reprendre, une nouvelle affectation est créée ; l’affectation terminée n’est pas réactivée silencieusement.
+Une réouverture autorisée depuis un dossier clôturé produit l’événement `DOSSIER_REOUVERT`, avec état précédent, auteur, date et motif, puis remet chaque volet inclus à `A_AFFECTER` ; le statut global recalculé devient `EN_ATTENTE_AFFECTATION`. `REOUVERT` n’est pas un état durable. L’état et les vérifications antérieures ne sont pas effacés, mais ne peuvent pas justifier une re-clôture : chaque volet inclus doit avoir une nouvelle affectation et une vérification positive enregistrées après la dernière réouverture. La nouvelle affectation remet le dossier en traitement ; une affectation terminée n’est jamais réactivée silencieusement.
 
-## 7. Points citoyens — hors périmètre initial
+## 7. Points citoyens
 
-Les points et récompenses ne sont pas inclus dans le modèle initial et ne conditionnent jamais la réception ou le traitement d’un signalement. Toute activation ultérieure nécessiterait un barème transparent, un registre de mouvements, des règles anti-abus et un mécanisme de correction ou de réclamation.
+Les points sont inclus au MVP selon la décision DC-29. Ils ne conditionnent jamais la réception ni le traitement d’un signalement.
 
-### RG44 — Points non requis
-La soumission ou le traitement d’un signalement ne dépend d’aucune récompense. Les points citoyens ne font pas partie du prototype initial.
+### RG44 — Points non requis pour le service
+Le dépôt, l’examen, le rattachement et le traitement d’un signalement restent accessibles indépendamment du solde de points. Les points n’accordent aucune priorité opérationnelle.
 
-### RG45 — Conditions d’une éventuelle extension
-Si une version future introduit des points, elle doit définir un barème public qui ne récompense pas simplement chaque signalement soumis et qui traite les doublons, rejets, corrections et réouvertures.
+### RG45 — Barème d’attribution
+Un signalement accepté pour rattachement crédite une fois 10 points à son auteur. Un signalement rejeté avant acceptation ne crédite aucun point. Un rattachement ultérieur de type `DOUBLON_CONFIRME` annule le crédit correspondant par un mouvement compensatoire de -10 points ; le type `CONFIRMATION` ne constitue pas à lui seul un doublon. Une correction motivée d’une acceptation est autorisée uniquement avant le rattachement et produit également la compensation correspondante. Les attributions administratives libres sont désactivées.
 
-### RG46 — Traçabilité des récompenses futures
-Toute extension de points devra conserver des mouvements distincts, corrigeables et attribuables, avec des règles anti-abus. Ces données ne sont pas prévues dans le MCD/MLD de la version 2.8.
+### RG46 — Registre et correction
+Toute attribution ou compensation est conservée comme mouvement distinct, avec son motif et la référence du mouvement d’origine en cas de compensation. Une attribution ne peut être compensée qu’une fois. Aucun mouvement historique n’est supprimé ou modifié ; le solde est la somme algébrique du registre.
 
 ## 8. Journal métier et historique
 
 ### RG47 — Événements significatifs
-Toute création ou modification métier ayant un effet sur l’état, la responsabilité ou le résultat produit un événement métier approprié. Si un mécanisme de récompense est ajouté ultérieurement, ses mouvements devront également être tracés.
+Toute création ou modification métier ayant un effet sur l’état, la responsabilité ou le résultat produit un événement métier approprié. Les attributions et compensations de points sont portées par l’événement métier qui les déclenche et restent détaillées dans le registre de points.
 
 ### RG48 — Contenu d’événement
 Un événement conserve au minimum son type, l’objet principal visé, la date effective si elle est connue, la date d’enregistrement, l’origine et l’acteur humain lorsqu’il existe. Les valeurs avant/après et les motifs ne contiennent que les informations utiles.
@@ -214,3 +217,27 @@ Toute modification des statuts, cardinalités ou responsabilités est répercut�
 
 ### RG61 — Décision d'acceptation et rattachement effectif
 `ACCEPTE_POUR_RATTACHEMENT` représente une décision métier positive avant la création d'un lien actif ; `RATTACHE` signifie qu'un `RATTACHEMENT_SIGNALEMENT` actif existe réellement. Ces états ne sont pas interchangeables. La création ou la correction d'un lien, l'état du signalement et l'événement correspondant doivent être cohérents dans une même opération logique. Le retrait d'un lien sans remplacement exige un motif et ramène le signalement à `ACCEPTE_POUR_RATTACHEMENT` ou `QUALIFIE` selon la décision enregistrée.
+
+### RG62 — Résultat d’intervention exceptionnel
+La fin d’une intervention exige un résultat reconnu. Tout résultat autre que `SUCCES_TOTAL` exige un motif explicite d’au moins 10 caractères. Une issue exceptionnelle ne doit jamais être présentée comme une résolution réussie.
+
+### RG63 — Vérification non positive
+Tout résultat de vérification autre que `CONFORME_RESOLU`, y compris `A_REVOIR`, exige un motif d’au moins 10 caractères et déclenche une reprise tracée. L’affectation redevient active, une nouvelle intervention programmée est créée et la vérification précédente reste historisée.
+
+### RG64 — Provenance du contenu de dossier
+Les catégories incluses lors de la création d’un dossier sont distinguées des ajouts manuels ultérieurs. Un ajout manuel conserve son origine, son acteur, sa date et un motif non vide d’au moins 10 caractères. L’origine initiale et les données historiques identifiées ne portent pas un faux motif manuel.
+
+### RG65 — Disponibilité d’équipe
+La disponibilité d’une équipe constitue une information d’aide à la décision, pas un verrou automatique d’affectation. La compétence valide reste une condition métier ; l’agent d’affectation prend et trace la décision opérationnelle selon le scénario.
+
+### RG66 — Visibilité du journal d’audit
+Les événements consultables sont limités aux types autorisés pour les rôles de l’utilisateur. Un filtre demandé par l’utilisateur se combine par intersection avec ces droits et ne peut jamais les élargir. L’administrateur du scénario peut consulter l’ensemble du journal.
+
+### RG67 — Réactivation d’un référentiel
+La réactivation d’un type de déchet ou d’une équipe exige un motif explicite d’au moins 10 caractères et produit une trace métier. La réactivation d’une équipe ne réactive pas implicitement ses anciennes appartenances.
+
+### RG68 — Conservation et purge des photos
+Dans le scénario académique, les fichiers photo expirent un an après leur date de référence. À l’expiration, les médias originaux stockés localement et les variantes dérivées sont supprimés par lots bornés ; les références et décisions métier restent consultables. Une suppression échouée ne doit pas marquer le média comme purgé. La durée d’un an doit être revue avant tout usage réel au regard des obligations applicables.
+
+### RG69 — Définition des indicateurs exposés
+Chaque indicateur retourné par l’API explicite sa population et sa période de calcul. Les observations, dossiers, affectations, interventions et résolutions vérifiées restent des populations distinctes et ne sont pas additionnés comme des mesures équivalentes.

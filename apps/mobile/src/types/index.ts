@@ -78,9 +78,32 @@ export interface NotificationItem {
   lienCible: string | null;
 }
 
-export interface OfflineAction {
+export interface OfflineActionMetadata {
   id: string;
-  type: 'SIGNALEMENT_CREATION' | 'INTERVENTION_TERMINER';
-  payload: any;
+  ownerId: string;
   timestamp: string;
 }
+
+export type OfflineAction =
+  | (OfflineActionMetadata & {
+      type: 'SIGNALEMENT_CREATION';
+      payload: SignalementDraft & { idSignalementCree?: string };
+    })
+  | (OfflineActionMetadata & {
+      type: 'INTERVENTION_TERMINER';
+      payload: {
+        idIntervention: string;
+        data: {
+          resultatIntervention: ResultatIntervention;
+          compteRendu: string;
+          motifException?: string;
+        };
+        photoUri?: string;
+        photoReference?: string;
+      };
+    });
+
+type OfflineActionInputFor<T> = T extends OfflineAction
+  ? Omit<T, keyof OfflineActionMetadata>
+  : never;
+export type OfflineActionInput = OfflineActionInputFor<OfflineAction>;

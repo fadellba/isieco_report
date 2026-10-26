@@ -30,11 +30,14 @@ describe('Documentation OpenAPI / Swagger UI', () => {
     expect(spec.paths['/api/signalements/']).toBeDefined();
     expect(spec.paths['/api/qualification/boite-reception']).toBeDefined();
     expect(spec.paths['/api/dossiers/']).toBeDefined();
+    expect(spec.paths['/api/dossiers/{id}/priorite'].patch).toBeDefined();
+    expect(spec.paths['/api/dossiers/{id}/localisation'].patch).toBeDefined();
     expect(spec.paths['/api/affectations/']).toBeDefined();
     expect(spec.paths['/api/interventions/mes-missions']).toBeDefined();
     expect(spec.paths['/api/verifications/']).toBeDefined();
     expect(spec.paths['/api/evenements/audit-trail']).toBeDefined();
     expect(spec.paths['/api/points/mes-points']).toBeDefined();
+    expect(spec.paths['/api/points/attribuer']).toBeUndefined();
     expect(spec.paths['/api/notifications/']).toBeDefined();
     expect(spec.paths['/api/carte/points']).toBeDefined();
     expect(spec.paths['/api/utilisateurs/']).toBeDefined();

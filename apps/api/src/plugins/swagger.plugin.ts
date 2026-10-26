@@ -13,7 +13,7 @@ export const swaggerPlugin = fp(async (fastify) => {
 ### Invariants et Règles d'Ingénierie Métier Intégrés :
 - **Sécurité Dual-Client :** Cookie de session \`HttpOnly\` (Portail Web) et Bearer Token JWT (Application Mobile Nomade).
 - **Règles RG01 à RG07 :** Déclaration citoyenne multi-catégories avec coordonnées GPS ou repère textuel obligatoire.
-- **Règles RG11 à RG22 :** Détection de doublons géodésiques (< 50m) et qualification vers un dossier commun sans perte d'auteurs.
+- **Règles RG11 à RG22 :** Détection de doublons géodésiques (< 500 m) et qualification vers un dossier commun sans perte d'auteurs.
 - **Règles RG23 à RG36 :** Découpage du dossier en volets techniques et affectation aux équipes selon compétences actives.
 - **Règles RG37 à RG42 :** Compte-rendu terrain certifié (>= 10 car.) et photo de preuve après intervention.
 - **Règles RG43 à RG50 :** Invariant de clôture stricte : 100% de résolution confirmée exigée avant archivage.
@@ -28,8 +28,8 @@ export const swaggerPlugin = fp(async (fastify) => {
       },
       servers: [
         {
-          url: 'http://localhost:3001',
-          description: 'Serveur de Développement Local Fastify',
+          url: '/',
+          description: 'Origine de l’API, locale ou déployée',
         },
       ],
       components: {
@@ -37,13 +37,12 @@ export const swaggerPlugin = fp(async (fastify) => {
           bearerAuth: {
             type: 'http',
             scheme: 'bearer',
-            bearerFormat: 'JWT',
-            description: 'Token JWT transmis dans l en-tête Authorization: Bearer <token>',
+            description: 'Jeton de session opaque transmis par en-tête Authorization: Bearer <token>.',
           },
           cookieAuth: {
             type: 'apiKey',
             in: 'cookie',
-            name: 'session_id',
+            name: 'session_token',
             description: 'Cookie de session HttpOnly transmis automatiquement par le navigateur',
           },
         },
@@ -81,4 +80,3 @@ export const swaggerPlugin = fp(async (fastify) => {
     return reply.redirect('/documentation');
   });
 });
-

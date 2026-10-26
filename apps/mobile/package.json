@@ -9,7 +9,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@isieco/shared": "*",
@@ -19,9 +20,11 @@
     "@react-navigation/native-stack": "^7.21.0",
     "expo": "^58.0.14",
     "expo-constants": "~58.0.12",
+    "expo-crypto": "~58.0.7",
     "expo-file-system": "~58.0.9",
     "expo-image-picker": "~58.0.10",
     "expo-location": "~58.0.17",
+    "expo-secure-store": "~58.0.2",
     "expo-splash-screen": "~58.0.10",
     "expo-status-bar": "~58.0.3",
     "react": "19.3.0",
@@ -34,6 +37,7 @@
   "devDependencies": {
     "@babel/core": "^7.20.0",
     "@types/react": "~19.3.0",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.11"
   }
 }

@@ -5,7 +5,9 @@ export default defineConfig({
     environment: 'node',
     globals: true,
     fileParallelism: false,
-    testTimeout: 20000,
+    testTimeout: 30000,
+    hookTimeout: 30000,
+    setupFiles: ['./tests/setup.ts'],
     env: {
       NODE_ENV: 'test',
       DB_NAME: 'isieco_test',
@@ -17,4 +19,3 @@ export default defineConfig({
     },
   },
 });
-

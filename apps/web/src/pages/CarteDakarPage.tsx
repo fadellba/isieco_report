@@ -29,13 +29,17 @@ export const CarteDakarPage: React.FC = () => {
   const [points, setPoints] = useState<CartePoint[]>([]);
   const [sansCoordonnees, setSansCoordonnees] = useState<SignalementSansCoordonnees[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchPoints = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const res = await api.get<CartePointsResponse>('/carte/points');
       setPoints(res.pointsGeolocalises || []);
       setSansCoordonnees(res.sansCoordonnees || []);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Impossible de charger les données cartographiques.');
     } finally {
       setLoading(false);
     }
@@ -49,9 +53,9 @@ export const CarteDakarPage: React.FC = () => {
   const dakarCenter: [number, number] = [14.6735, -17.435];
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="ops-workflow-page ops-map-page p-6 space-y-6">
       {/* Title */}
-      <div className="flex items-center justify-between">
+      <div className="ops-workflow-heading flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-isieco-dark flex items-center gap-2">
             <MapPin className="h-6 w-6 text-isieco-primary" />
@@ -71,17 +75,44 @@ export const CarteDakarPage: React.FC = () => {
         </button>
       </div>
 
+      <div className="ops-workflow-metrics" aria-label="Aperçu cartographique">
+        <article className="ops-workflow-metric">
+          <span>Points géolocalisés</span>
+          <strong>{loading ? '—' : points.length}</strong>
+          <small>Dossiers et signalements</small>
+        </article>
+        <article className="ops-workflow-metric">
+          <span>Repères textuels</span>
+          <strong>{loading ? '—' : sansCoordonnees.length}</strong>
+          <small>À localiser sur le terrain</small>
+        </article>
+        <article className="ops-workflow-metric">
+          <span>Zone affichée</span>
+          <strong>Dakar</strong>
+          <small>Plateau et Médina</small>
+        </article>
+      </div>
+
+      {loadError && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700" role="alert">
+          <span>Erreur de chargement : {loadError}</span>
+          <button type="button" onClick={() => void fetchPoints()} className="font-semibold underline">
+            Réessayer
+          </button>
+        </div>
+      )}
+
       {/* Main Map + Side List */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[600px]">
+      <div className="ops-workflow-grid ops-map-layout grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[600px]">
         
         {/* Left : Leaflet Map (8 cols) */}
-        <div className="lg:col-span-8 rounded-xl border border-isieco-border bg-white overflow-hidden shadow-sm flex flex-col h-[650px]">
+        <div className="ops-workflow-panel ops-map-panel lg:col-span-8 rounded-xl border border-isieco-border bg-white overflow-hidden shadow-sm flex flex-col h-[650px]">
           <div className="border-b border-isieco-border p-3 bg-gray-50 flex items-center justify-between text-xs">
             <span className="font-bold text-isieco-dark uppercase tracking-wider flex items-center gap-2">
               <Layers className="h-4 w-4 text-isieco-primary" />
               Vue Territoriale ({points.length} points géolocalisés)
             </span>
-            <div className="flex items-center gap-3">
+            <div className="ops-map-legend flex items-center gap-3">
               <span className="flex items-center gap-1.5 text-[11px] text-gray-700">
                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-600 inline-block" />
                 Dossiers Opérationnels
@@ -143,7 +174,7 @@ export const CarteDakarPage: React.FC = () => {
         </div>
 
         {/* Right : Liste des signalements sans GPS (4 cols) (Test T37) */}
-        <div className="lg:col-span-4 rounded-xl border border-isieco-border bg-white shadow-sm flex flex-col h-[650px]">
+        <div className="ops-workflow-panel ops-map-panel lg:col-span-4 rounded-xl border border-isieco-border bg-white shadow-sm flex flex-col h-[650px]">
           <div className="border-b border-isieco-border p-3.5 bg-gray-50/70">
             <span className="text-xs font-bold uppercase tracking-wider text-isieco-dark block">
               Dépôts sans GPS exploitables ({sansCoordonnees.length})
@@ -156,7 +187,11 @@ export const CarteDakarPage: React.FC = () => {
           <div className="divide-y divide-isieco-border overflow-y-auto flex-1">
             {sansCoordonnees.length === 0 ? (
               <div className="p-8 text-center text-xs text-isieco-muted">
-                Tous les signalements reçus disposent de coordonnées GPS valides.
+                {loading
+                  ? 'Chargement des signalements…'
+                  : loadError
+                    ? 'Les signalements sans coordonnées ne sont pas disponibles.'
+                    : 'Tous les signalements reçus disposent de coordonnées GPS valides.'}
               </div>
             ) : (
               sansCoordonnees.map((s) => (

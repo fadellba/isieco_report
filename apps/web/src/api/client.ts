@@ -38,7 +38,7 @@ export async function apiRequest<T = unknown>(
   const url = normalizedPath;
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
     ...(options.headers as Record<string, string> || {}),
   };
 
@@ -98,4 +98,3 @@ export const api = {
 };
 
 export const apiClient = api;
-

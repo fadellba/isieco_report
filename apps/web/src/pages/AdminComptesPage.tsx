@@ -105,9 +105,9 @@ export const AdminComptesPage: React.FC = () => {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="ops-workflow-page p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="ops-workflow-heading flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-isieco-dark tracking-tight flex items-center gap-2">
             <Users className="h-7 w-7 text-isieco-primary" />
@@ -177,7 +177,7 @@ export const AdminComptesPage: React.FC = () => {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-700">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-700" role="alert">
           {error}
         </div>
       )}
@@ -386,4 +386,3 @@ export const AdminComptesPage: React.FC = () => {
     </div>
   );
 };
-

@@ -10,12 +10,11 @@ const securityPluginCallback: FastifyPluginAsync = async (fastify) => {
   // CORS
   await fastify.register(cors, {
     origin: (origin, cb) => {
-      // Autoriser requêtes locales (Web Vite 5173, Mobile Metro 8081) ou requêtes sans origine (Mobile direct)
-      if (!origin || origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      if (!origin || config.corsOrigins.includes(origin)) {
         cb(null, true);
         return;
       }
-      cb(new Error('Non autorisé par la politique CORS'), false);
+      cb(null, false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -30,6 +29,10 @@ const securityPluginCallback: FastifyPluginAsync = async (fastify) => {
 
   // Gestionnaire global d'erreurs
   fastify.setErrorHandler((error, req, reply) => {
+    const statusCode =
+      error instanceof Error && 'statusCode' in error && typeof error.statusCode === 'number'
+        ? error.statusCode
+        : 500;
     // 1. Erreurs métier ou HTTP contrôlées (AppError)
     if (error instanceof AppError) {
       if (error.statusCode === 401 || error.statusCode === 403) {
@@ -41,7 +44,6 @@ const securityPluginCallback: FastifyPluginAsync = async (fastify) => {
           user: req.user?.idUtilisateur || 'ANONYMOUS',
           ip: req.ip,
           code: error.code,
-          message: error.message,
         });
       }
 
@@ -82,8 +84,12 @@ const securityPluginCallback: FastifyPluginAsync = async (fastify) => {
     }
 
     // 4. Erreurs inattendues (500)
-    req.log.error(error);
-    return reply.status(500).send({
+    req.log.error({
+      requestId: req.id,
+      errorName: error instanceof Error ? error.name : 'UnknownError',
+      statusCode,
+    }, 'Unhandled request error');
+    return reply.status(statusCode).send({
       success: false,
       error: {
         code: 'INTERNAL_SERVER_ERROR',

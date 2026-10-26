@@ -35,8 +35,13 @@ export const IMAGE_TYPES: Record<
   },
 };
 
+export type PrivateImagePart = {
+  mimetype: string;
+  file: AsyncIterable<Uint8Array>;
+};
+
 export async function storePrivateImage(
-  part: MultipartFile,
+  part: MultipartFile | PrivateImagePart,
   idPhoto: string
 ): Promise<{ filename: string; mimeType: string }> {
   const imageType = IMAGE_TYPES[part.mimetype];
@@ -52,7 +57,8 @@ export async function storePrivateImage(
     chunks.push(buffer);
   }
 
-  if (part.file.truncated || fileSize > config.maxFileSize) {
+  const truncated = 'truncated' in part.file && part.file.truncated;
+  if (truncated || fileSize > config.maxFileSize) {
     throw new BadRequestError('La photo dépasse la taille maximale de 5 Mo.');
   }
 

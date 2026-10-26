@@ -8,7 +8,7 @@ import {
   TEST_TYPES_DECHETS,
   TEST_EQUIPES,
 } from './helpers.js';
-import { ResultatIntervention, ResultatVerification, RoleCode } from '@isieco/shared';
+import { ResultatIntervention, ResultatVerification } from '@isieco/shared';
 import { getDb } from '../src/db/index.js';
 
 describe('Jalon M7 (Tranche 6) — Cartographie Dakar, Indicateurs & Transfert Externe', () => {
@@ -304,22 +304,30 @@ describe('Jalon M7 (Tranche 6) — Cartographie Dakar, Indicateurs & Transfert E
   // --------------------------------------------------------------------------
   // Extension Valorisation : Points et Notifications Internes
   // --------------------------------------------------------------------------
-  it("Extensions : Consultation et attribution de points, et accusés de réception notifications", async () => {
+  it("Extensions : points du barème métier et accusés de réception notifications", async () => {
     const citoyen = await loginAs(app, TEST_PERSONAS.CITOYEN.email);
-    const admin = await loginAs(app, TEST_PERSONAS.ADMIN.email);
+    const agentQualif = await loginAs(app, TEST_PERSONAS.QUALIFICATION.email);
 
-    // 1. Attribution manuelle de 50 points de bonus civique
-    const pointRes = await app.inject({
+    // 1. Attribution automatique du barème après qualification
+    const signalement = await app.inject({
       method: 'POST',
-      url: '/api/points/attribuer',
-      headers: admin.headers,
+      url: '/api/signalements',
+      headers: citoyen.headers,
       payload: {
-        idUtilisateur: TEST_PERSONAS.CITOYEN.id,
-        points: 50,
-        motif: 'Bonus civique Semaine de la Propreté Dakar',
+        description: 'Déchets plastiques près du marché',
+        latitude: 14.671,
+        longitude: -17.433,
+        categories: [{ idTypeDechet: TEST_TYPES_DECHETS.PLASTIQUE }],
       },
     });
-    expect(pointRes.statusCode).toBe(201);
+    expect(signalement.statusCode).toBe(201);
+    const qualification = await app.inject({
+      method: 'POST',
+      url: `/api/qualification/signalements/${signalement.json().idSignalement}/qualifier`,
+      headers: agentQualif.headers,
+      payload: { motif: 'Signalement recevable' },
+    });
+    expect(qualification.statusCode).toBe(200);
 
     // 2. Consultation du solde et historique de points par le citoyen
     const soldeRes = await app.inject({
@@ -328,7 +336,7 @@ describe('Jalon M7 (Tranche 6) — Cartographie Dakar, Indicateurs & Transfert E
       headers: citoyen.headers,
     });
     expect(soldeRes.statusCode).toBe(200);
-    expect(soldeRes.json().soldeTotal).toBeGreaterThanOrEqual(50);
+    expect(soldeRes.json().soldeTotal).toBe(10);
 
     // 3. Consultation des notifications citoyennes
     const notifRes = await app.inject({
@@ -347,7 +355,17 @@ describe('Jalon M7 (Tranche 6) — Cartographie Dakar, Indicateurs & Transfert E
         headers: citoyen.headers,
       });
       expect(marquerLu.statusCode).toBe(200);
-      expect(marquerLu.json().lu).toBe(true);
+      expect(marquerLu.json().success).toBe(true);
+      const notificationsApresLecture = await app.inject({
+        method: 'GET',
+        url: '/api/notifications',
+        headers: citoyen.headers,
+      });
+      expect(
+        notificationsApresLecture.json().data.find(
+          (notification: { idNotification: string }) => notification.idNotification === idNotif,
+        )?.lu,
+      ).toBe(true);
     }
   });
 });

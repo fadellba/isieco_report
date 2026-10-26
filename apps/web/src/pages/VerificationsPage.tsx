@@ -26,8 +26,10 @@ export const VerificationsPage: React.FC = () => {
   // Modale de réouverture (Test T15 / T36)
   const [reouvrirModalOpen, setReouvrirModalOpen] = useState(false);
   const [dossierToReopen, setDossierToReopen] = useState<string | null>(null);
+  const [nonConformiteModalOpen, setNonConformiteModalOpen] = useState(false);
+  const [affectationToReject, setAffectationToReject] = useState<string | null>(null);
 
-  const fetchDossiers = async () => {
+  const fetchDossiers = async (): Promise<boolean> => {
     try {
       setLoading(true);
       setLoadError(null);
@@ -39,13 +41,28 @@ export const VerificationsPage: React.FC = () => {
         setSelectedDossier(null);
         setDetailDossierId(null);
       }
+      return true;
     } catch (error) {
       setDossiers([]);
       setSelectedDossier(null);
       setDetailDossierId(null);
       setLoadError(error instanceof Error ? error.message : 'Impossible de charger les dossiers.');
+      return false;
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    const selectedDossierId = selectedDossier?.id_dossier;
+    if (!(await fetchDossiers()) || !selectedDossierId) return;
+
+    try {
+      const res = await api.get<ApiDataResponse<DossierDetail>>(`/dossiers/${selectedDossierId}`);
+      setSelectedDossier(res.data);
+    } catch (error) {
+      setSelectedDossier(null);
+      setLoadError(error instanceof Error ? error.message : 'Impossible de charger le détail du dossier.');
     }
   };
 
@@ -83,26 +100,20 @@ export const VerificationsPage: React.FC = () => {
   };
 
   // Rejet d un volet (NON_CONFORME -> réactive l affectation)
-  const handleRejeterVolet = async (idAffectation: string) => {
-    if (!selectedDossier) return;
-    const motif = prompt('Motif de non-conformité (résidus restants, reprise nécessaire) :');
-    if (!motif || motif.trim().length < 5) return;
+  const handleRejeterVolet = async (motif: string) => {
+    if (!selectedDossier || !affectationToReject) return;
 
-    try {
-      setFeedback(null);
-      await api.post('/verifications', {
-        idAffectation,
-        resultatVerification: 'NON_CONFORME',
-        motif: motif.trim(),
-      });
-      setFeedback({
-        type: 'success',
-        message: 'Volet marqué non-conforme. Affectation réactivée pour nouvelle intervention.',
-      });
-      await loadDossierDetail(selectedDossier.id_dossier);
-    } catch (error) {
-      setFeedback({ type: 'error', message: error instanceof Error ? error.message : 'Erreur lors du rejet du volet.' });
-    }
+    setFeedback(null);
+    await api.post('/verifications', {
+      idAffectation: affectationToReject,
+      resultatVerification: 'NON_CONFORME',
+      motif,
+    });
+    setFeedback({
+      type: 'success',
+      message: 'Volet marqué non-conforme. Affectation réactivée pour nouvelle intervention.',
+    });
+    await loadDossierDetail(selectedDossier.id_dossier);
   };
 
   // Clôture 100% de résolution confirmée (Test T13 / T14)
@@ -148,14 +159,27 @@ export const VerificationsPage: React.FC = () => {
   };
 
   // Calcul du taux de volets résolus (100% requis pour bouton de clôture)
-  const totalVoletsInclus = selectedDossier?.volets.filter((v) => v.etatContenuDossier === 'INCLUSE').length || 0;
-  const voletsTermines = selectedDossier?.affectations.filter((a) => a.etatAffectation === 'TERMINEE').length || 0;
-  const is100PercentResolved = totalVoletsInclus > 0 && voletsTermines >= totalVoletsInclus;
+  const voletsInclus = selectedDossier?.volets.filter((v) => v.etatContenuDossier === 'INCLUSE') || [];
+  const totalVoletsInclus = voletsInclus.length;
+  const dateReouverture = selectedDossier?.date_reouverture
+    ? new Date(selectedDossier.date_reouverture).getTime()
+    : null;
+  const voletsTermines = voletsInclus.filter((volet) => {
+    const affectationCourante = selectedDossier?.affectations.find((affectation) =>
+      affectation.idTypeDechet === volet.idTypeDechet
+      && (dateReouverture === null || new Date(affectation.dateAffectation).getTime() > dateReouverture)
+    );
+    return affectationCourante?.etatAffectation === 'TERMINEE';
+  }).length;
+  const is100PercentResolved = totalVoletsInclus > 0 && voletsTermines === totalVoletsInclus;
+  const resolutionPercent = totalVoletsInclus > 0
+    ? Math.min(100, Math.round((voletsTermines / totalVoletsInclus) * 100))
+    : 0;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="ops-workflow-page p-6 space-y-6">
       {/* Title */}
-      <div className="flex items-center justify-between">
+      <div className="ops-workflow-heading flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-isieco-dark flex items-center gap-2">
             <CheckCircle2 className="h-6 w-6 text-isieco-primary" />
@@ -166,13 +190,31 @@ export const VerificationsPage: React.FC = () => {
           </p>
         </div>
         <button
-          onClick={fetchDossiers}
+          onClick={() => void handleRefresh()}
           disabled={loading}
           className="flex items-center gap-1.5 rounded-lg border border-isieco-border bg-white px-3 py-1.5 text-xs font-semibold text-isieco-dark shadow-sm hover:bg-gray-50"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
           Actualiser
         </button>
+      </div>
+
+      <div className="ops-workflow-metrics" aria-label="Aperçu des vérifications">
+        <article className="ops-workflow-metric">
+          <span>Dossiers à contrôler</span>
+          <strong>{loading ? '—' : dossiers.length}</strong>
+          <small>Disponibles dans le suivi</small>
+        </article>
+        <article className="ops-workflow-metric">
+          <span>Volets vérifiés</span>
+          <strong>{selectedDossier ? `${voletsTermines} / ${totalVoletsInclus}` : '—'}</strong>
+          <small>{selectedDossier?.reference_dossier || 'Sélectionnez un dossier'}</small>
+        </article>
+        <article className="ops-workflow-metric">
+          <span>Progression de clôture</span>
+          <strong>{selectedDossier ? `${resolutionPercent}%` : '—'}</strong>
+          <small>Clôture soumise à 100 %</small>
+        </article>
       </div>
 
       {feedback && (
@@ -209,9 +251,9 @@ export const VerificationsPage: React.FC = () => {
       )}
 
       {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[600px]">
+      <div className="ops-workflow-grid grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[600px]">
         {/* Left Dossiers List (4 cols) */}
-        <div className="lg:col-span-4 rounded-xl border border-isieco-border bg-white shadow-sm flex flex-col">
+        <div className="ops-workflow-panel lg:col-span-4 rounded-xl border border-isieco-border bg-white shadow-sm flex flex-col">
           <div className="border-b border-isieco-border p-3.5 bg-gray-50/70 flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-isieco-dark">
               Dossiers ({dossiers.length})
@@ -219,7 +261,15 @@ export const VerificationsPage: React.FC = () => {
           </div>
 
           <div className="divide-y divide-isieco-border overflow-y-auto max-h-[650px] flex-1">
-            {dossiers.map((d) => (
+            {dossiers.length === 0 ? (
+              <div className="p-8 text-center text-xs text-isieco-muted">
+                {loading
+                  ? 'Chargement des dossiers…'
+                  : loadError
+                    ? 'Les dossiers ne sont pas disponibles.'
+                    : 'Aucun dossier à contrôler.'}
+              </div>
+            ) : dossiers.map((d) => (
               <div
                 key={d.idDossier}
                 onClick={() => loadDossierDetail(d.idDossier)}
@@ -244,9 +294,9 @@ export const VerificationsPage: React.FC = () => {
         </div>
 
         {/* Right Verification Controls (8 cols) */}
-        <div className="lg:col-span-8">
+        <div className="ops-workflow-detail lg:col-span-8">
           {selectedDossier ? (
-            <div className="rounded-xl border border-isieco-border bg-white p-6 shadow-sm space-y-6">
+            <div className="ops-workflow-panel rounded-xl border border-isieco-border bg-white p-6 shadow-sm space-y-6">
               {/* Header */}
               <div className="border-b border-isieco-border pb-4 flex items-start justify-between">
                 <div>
@@ -295,16 +345,16 @@ export const VerificationsPage: React.FC = () => {
                       is100PercentResolved ? 'bg-emerald-600' : 'bg-amber-500'
                     }`}
                     style={{
-                      width: `${
-                        totalVoletsInclus > 0 ? (voletsTermines / totalVoletsInclus) * 100 : 0
-                      }%`,
+                      width: `${resolutionPercent}%`,
                     }}
                   />
                 </div>
                 <p className="text-[11px] text-isieco-muted mt-2">
                   {is100PercentResolved
                     ? '✓ 100% des volets sont positivement vérifiés. La clôture définitive peut être prononcée.'
-                    : '⚠ Clôture bloquée : chaque catégorie de déchet doit obligatoirement faire l objet d une vérification positive.'}
+                    : dateReouverture !== null
+                      ? '⚠ Dossier rouvert : chaque volet inclus doit recevoir une nouvelle affectation et une nouvelle vérification positive avant toute re-clôture.'
+                      : '⚠ Clôture bloquée : chaque catégorie de déchet doit obligatoirement faire l objet d une vérification positive.'}
                 </p>
               </div>
 
@@ -338,11 +388,14 @@ export const VerificationsPage: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Actions vérificateurs si affectation ACTIVE ou TERMINEE */}
-                        {selectedDossier.statut_dossier !== 'CLOS_RESOLUTION_CONFIRMEE' && (
+                        {selectedDossier.statut_dossier !== 'CLOS_RESOLUTION_CONFIRMEE' &&
+                        aff.etatAffectation === 'A_VERIFIER' ? (
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => handleRejeterVolet(aff.idAffectation)}
+                              onClick={() => {
+                                setAffectationToReject(aff.idAffectation);
+                                setNonConformiteModalOpen(true);
+                              }}
                               className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
                             >
                               <XCircle className="h-3.5 w-3.5" />
@@ -356,6 +409,14 @@ export const VerificationsPage: React.FC = () => {
                               Valider Résolu
                             </button>
                           </div>
+                        ) : (
+                          <p className="text-xs text-isieco-muted" role="status">
+                            {aff.etatAffectation === 'ACTIVE'
+                              ? 'En attente du compte-rendu de l’équipe terrain.'
+                              : aff.etatAffectation === 'TERMINEE'
+                                ? 'Vérification déjà effectuée pour ce volet.'
+                                : 'Aucune action de vérification disponible.'}
+                          </p>
                         )}
                       </div>
                     ))
@@ -383,7 +444,9 @@ export const VerificationsPage: React.FC = () => {
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-isieco-border p-12 text-center text-xs text-isieco-muted bg-white flex flex-col items-center justify-center min-h-[400px]">
-              Sélectionnez un dossier à gauche pour examiner ses interventions terrain et valider la clôture.
+              {loading || (detailDossierId && !loadError)
+                ? 'Chargement du dossier sélectionné…'
+                : 'Sélectionnez un dossier à gauche pour examiner ses interventions terrain et valider la clôture.'}
             </div>
           )}
         </div>
@@ -399,6 +462,20 @@ export const VerificationsPage: React.FC = () => {
         isDestructive={false}
         onConfirm={handleConfirmReouverture}
         onClose={() => setReouvrirModalOpen(false)}
+      />
+      <ReasonModal
+        isOpen={nonConformiteModalOpen}
+        title="Signaler une non-conformité"
+        description="Décrivez les résidus ou le problème constaté. Une reprise sera programmée pour ce volet."
+        placeholder="Ex. Des déchets restent sur le site ; une nouvelle intervention est nécessaire."
+        confirmLabel="Confirmer la non-conformité"
+        minChars={5}
+        isDestructive
+        onConfirm={handleRejeterVolet}
+        onClose={() => {
+          setNonConformiteModalOpen(false);
+          setAffectationToReject(null);
+        }}
       />
     </div>
   );

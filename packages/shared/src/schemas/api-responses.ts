@@ -67,6 +67,7 @@ export interface DossierDetail {
   longitude: number | null;
   description_localisation: string | null;
   date_cloture: string | null;
+  date_reouverture: string | null;
   nom_createur: string;
   volets: DossierVolet[];
   signalements: DossierSignalement[];

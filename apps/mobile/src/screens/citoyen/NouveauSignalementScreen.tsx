@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,12 +12,17 @@ import {
 } from 'react-native';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
+import * as Crypto from 'expo-crypto';
 import { mobileApi } from '../../services/api.js';
 import { useOffline } from '../../context/OfflineContext.js';
 import { TypeDechetRef } from '../../types/index.js';
+import { useTheme } from '../../context/ThemeContext.js';
+import type { DesignTokens } from '@isieco/shared';
 
 export const NouveauSignalementScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { isOnline, enqueueDraft } = useOffline();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [description, setDescription] = useState('');
   const [descriptionLoc, setDescriptionLoc] = useState('');
@@ -34,6 +39,7 @@ export const NouveauSignalementScreen: React.FC<{ navigation: any }> = ({ naviga
   const [photoUri, setPhotoUri] = useState<string | null>(null);
 
   const [submitting, setSubmitting] = useState(false);
+  const signalementRequest = useRef<{ signature: string; key: string } | null>(null);
 
   const loadTypesDechets = async () => {
     try {
@@ -178,16 +184,35 @@ export const NouveauSignalementScreen: React.FC<{ navigation: any }> = ({ naviga
     setSubmitting(true);
     try {
       if (isOnline) {
-        const created = await mobileApi.signalements.create(draft);
+        const signature = JSON.stringify({
+          description: draft.description,
+          latitude: draft.latitude,
+          longitude: draft.longitude,
+          precisionLocalisation: draft.precisionLocalisation,
+          descriptionLocalisation: draft.descriptionLocalisation,
+          categories: [...draft.categories].sort((left, right) =>
+            left.idTypeDechet.localeCompare(right.idTypeDechet),
+          ),
+        });
+        if (signalementRequest.current?.signature !== signature) {
+          signalementRequest.current = { signature, key: Crypto.randomUUID() };
+        }
+        const created = await mobileApi.signalements.create(
+          draft,
+          signalementRequest.current.key,
+        );
         let photoEnAttente = false;
         let photoErreur = '';
         if (photoUri) {
           try {
             await mobileApi.signalements.uploadPhoto(created.idSignalement, photoUri);
           } catch (error) {
-            await enqueueDraft('SIGNALEMENT_CREATION', {
-              ...draft,
-              idSignalementCree: created.idSignalement,
+            await enqueueDraft({
+              type: 'SIGNALEMENT_CREATION',
+              payload: {
+                ...draft,
+                idSignalementCree: created.idSignalement,
+              },
             });
             photoEnAttente = true;
             photoErreur =
@@ -201,8 +226,9 @@ export const NouveauSignalementScreen: React.FC<{ navigation: any }> = ({ naviga
             : 'Merci pour votre contribution citoyenne. Votre signalement a été transmis à la cellule de qualification.',
           [{ text: 'Voir mes signalements', onPress: () => navigation.navigate('MesSignalements') }]
         );
+        signalementRequest.current = null;
       } else {
-        await enqueueDraft('SIGNALEMENT_CREATION', draft);
+        await enqueueDraft({ type: 'SIGNALEMENT_CREATION', payload: draft });
         Alert.alert(
           'Mode Hors-Ligne',
           'Réseau indisponible : votre signalement a été mis en mémoire tampon locale. Il sera synchronisé dès le retour de la connexion.',
@@ -226,6 +252,7 @@ export const NouveauSignalementScreen: React.FC<{ navigation: any }> = ({ naviga
     <ScrollView contentContainerStyle={styles.container}>
       {/* Title */}
       <View style={styles.header}>
+        <Text style={styles.eyebrow}>{isOnline ? 'TRANSMISSION DISPONIBLE' : 'MODE HORS-LIGNE'}</Text>
         <Text style={styles.title}>Signaler une Anomalie</Text>
         <Text style={styles.subtitle}>
           Dépôt sauvage, encombrant ou décharge non autorisée à Dakar
@@ -238,7 +265,7 @@ export const NouveauSignalementScreen: React.FC<{ navigation: any }> = ({ naviga
         <TextInput
           style={styles.textArea}
           placeholder="Ex: Important tas de gravats et sacs plastiques obstruant le trottoir..."
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={colors.textSecondary}
           multiline
           numberOfLines={3}
           value={description}
@@ -257,7 +284,7 @@ export const NouveauSignalementScreen: React.FC<{ navigation: any }> = ({ naviga
             disabled={locLoading}
           >
             {locLoading ? (
-              <ActivityIndicator color="#ffffff" size="small" />
+              <ActivityIndicator color={colors.onPrimary} size="small" />
             ) : (
               <Text style={styles.gpsButtonText}>📍 Obtenir ma position GPS</Text>
             )}
@@ -278,7 +305,7 @@ export const NouveauSignalementScreen: React.FC<{ navigation: any }> = ({ naviga
         <TextInput
           style={styles.input}
           placeholder="Ex: Marché Sandaga, angle Rue Carnot / Émile Badiane"
-          placeholderTextColor="#94a3b8"
+          placeholderTextColor={colors.textSecondary}
           value={descriptionLoc}
           onChangeText={setDescriptionLoc}
         />
@@ -349,7 +376,7 @@ export const NouveauSignalementScreen: React.FC<{ navigation: any }> = ({ naviga
         disabled={submitting}
       >
         {submitting ? (
-          <ActivityIndicator color="#ffffff" />
+          <ActivityIndicator color={colors.onPrimary} />
         ) : (
           <Text style={styles.submitBtnText}>
             {isOnline ? '🚀 Transmettre le Signalement' : '💾 Sauvegarder (Mode Hors-Ligne)'}
@@ -360,47 +387,54 @@ export const NouveauSignalementScreen: React.FC<{ navigation: any }> = ({ naviga
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: DesignTokens) => StyleSheet.create({
   container: {
     padding: 18,
     paddingBottom: 40,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
   },
   header: {
     marginBottom: 16,
   },
+  eyebrow: {
+    marginBottom: 7,
+    color: colors.primary,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+  },
   title: {
     fontSize: 22,
     fontWeight: '900',
-    color: '#0f172a',
+    color: colors.textPrimary,
   },
   subtitle: {
     fontSize: 12,
-    color: '#64748b',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 16,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.border,
   },
   cardHeader: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#1e293b',
+    color: colors.textPrimary,
     marginBottom: 10,
     textTransform: 'uppercase',
   },
   hint: {
     fontSize: 11,
-    color: '#64748b',
+    color: colors.textSecondary,
     marginBottom: 10,
   },
   errorText: {
-    color: '#b91c1c',
+    color: colors.danger,
     fontSize: 11,
     marginTop: 8,
   },
@@ -410,21 +444,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 8,
-    backgroundColor: '#fee2e2',
+    backgroundColor: colors.dangerSurface,
   },
   retryButtonText: {
-    color: '#991b1b',
+    color: colors.danger,
     fontSize: 11,
     fontWeight: '700',
   },
   textArea: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: colors.border,
     borderRadius: 12,
     padding: 12,
     fontSize: 13,
-    color: '#0f172a',
+    color: colors.textPrimary,
     textAlignVertical: 'top',
   },
   gpsRow: {
@@ -433,13 +467,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   gpsButton: {
-    backgroundColor: '#2563eb',
+    backgroundColor: colors.primary,
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 14,
   },
   gpsButtonText: {
-    color: '#ffffff',
+    color: colors.onPrimary,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -449,28 +483,28 @@ const styles = StyleSheet.create({
   gpsCoords: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0f172a',
+    color: colors.textPrimary,
   },
   gpsAccuracy: {
     fontSize: 10,
-    color: '#16a34a',
+    color: colors.primary,
   },
   orText: {
     fontSize: 10,
-    color: '#94a3b8',
+    color: colors.textSecondary,
     textAlign: 'center',
     marginVertical: 12,
     fontWeight: '700',
   },
   input: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 12,
-    color: '#0f172a',
+    color: colors.textPrimary,
   },
   chipsContainer: {
     flexDirection: 'row',
@@ -481,21 +515,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 20,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.surfaceRaised,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: colors.border,
   },
   chipSelected: {
-    backgroundColor: '#dcfce7',
-    borderColor: '#16a34a',
+    backgroundColor: colors.primarySubtle,
+    borderColor: colors.primary,
   },
   chipText: {
     fontSize: 12,
-    color: '#475569',
+    color: colors.textSecondary,
     fontWeight: '600',
   },
   chipTextSelected: {
-    color: '#15803d',
+    color: colors.primary,
     fontWeight: '700',
   },
   photoActionsRow: {
@@ -504,9 +538,9 @@ const styles = StyleSheet.create({
   },
   photoBtn: {
     flex: 1,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.surfaceRaised,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: colors.border,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -514,7 +548,7 @@ const styles = StyleSheet.create({
   photoBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#334155',
+    color: colors.textPrimary,
   },
   photoPreviewBox: {
     alignItems: 'center',
@@ -529,29 +563,30 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: '#fee2e2',
+    backgroundColor: colors.dangerSurface,
   },
   removePhotoText: {
-    color: '#b91c1c',
+    color: colors.danger,
     fontSize: 11,
     fontWeight: '700',
   },
   submitBtn: {
-    backgroundColor: '#16a34a',
+    backgroundColor: colors.primary,
     borderRadius: 14,
     paddingVertical: 15,
     alignItems: 'center',
     marginTop: 4,
-    shadowColor: '#16a34a',
+    shadowColor: colors.primary,
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 3,
   },
   btnDisabled: {
-    backgroundColor: '#86efac',
+    backgroundColor: colors.primary,
+    opacity: 0.65,
   },
   submitBtnText: {
-    color: '#ffffff',
+    color: colors.onPrimary,
     fontSize: 14,
     fontWeight: '800',
   },

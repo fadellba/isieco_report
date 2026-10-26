@@ -1,10 +1,27 @@
 import { FastifyPluginAsync } from 'fastify';
-import { getDb } from '../../db/index.js';
 import { RoleCode } from '@isieco/shared';
 import { NotFoundError, BadRequestError } from '../../core/errors.js';
-import crypto from 'node:crypto';
+import {
+  assignRole,
+  listUsers,
+  updateAccountStatus,
+} from '../../application/use-cases/identity.js';
+import { IdentityRuleError } from '../../domain/identity.js';
 
 export const utilisateursRoutes: FastifyPluginAsync = async (fastify) => {
+  const repository = fastify.dependencies.identity;
+
+  function rethrowIdentityError(error: unknown): never {
+    if (!(error instanceof IdentityRuleError)) throw error;
+
+    switch (error.rule) {
+      case 'INVALID_ACCOUNT_STATUS':
+        throw new BadRequestError(error.message);
+      default:
+        throw error;
+    }
+  }
+
   // Liste des utilisateurs (Réservé ADMIN)
   fastify.get('/', {
     preHandler: [fastify.authorize([RoleCode.ADMIN])],
@@ -40,43 +57,7 @@ export const utilisateursRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
   }, async () => {
-    const db = getDb();
-    const users = await db.query<{
-      id_utilisateur: string;
-      nom: string;
-      prenom: string | null;
-      email: string;
-      telephone: string | null;
-      etat_compte: string;
-      date_inscription: string;
-    }>(
-      `SELECT id_utilisateur, nom, prenom, email, telephone, etat_compte, date_inscription
-       FROM utilisateur
-       ORDER BY nom ASC`
-    );
-
-    // Charger les rôles de chaque utilisateur
-    const results = await Promise.all(
-      users.map(async (u) => {
-        const roles = await db.query<{ code_role: string }>(
-          `SELECT r.code_role
-           FROM utilisateur_role ur
-           JOIN role r ON ur.id_role = r.id_role
-           WHERE ur.id_utilisateur = $1 AND (ur.date_fin IS NULL OR ur.date_fin >= CURRENT_TIMESTAMP)`,
-          [u.id_utilisateur]
-        );
-        return {
-          idUtilisateur: u.id_utilisateur,
-          nom: u.nom,
-          prenom: u.prenom,
-          email: u.email,
-          telephone: u.telephone,
-          etatCompte: u.etat_compte,
-          dateInscription: u.date_inscription,
-          roles: roles.map((r) => r.code_role),
-        };
-      })
-    );
+    const results = await listUsers(repository);
 
     return { success: true, count: results.length, data: results };
   });
@@ -120,55 +101,18 @@ export const utilisateursRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = req.params as { id: string };
     const { etatCompte, motif } = req.body as { etatCompte: string; motif?: string };
 
-    if (!['ACTIF', 'INACTIF', 'SUSPENDU'].includes(etatCompte)) {
-      throw new BadRequestError("L'état du compte doit être ACTIF, INACTIF ou SUSPENDU.");
+    let updated: boolean;
+    try {
+      updated = await updateAccountStatus(repository, {
+        idUtilisateur: id,
+        actorId: req.user!.idUtilisateur,
+        etatCompte,
+        motif: motif ?? null,
+      });
+    } catch (error) {
+      rethrowIdentityError(error);
     }
-
-    const db = getDb();
-    const user = await db.queryOne<{ id_utilisateur: string; etat_compte: string }>(
-      `SELECT id_utilisateur, etat_compte FROM utilisateur WHERE id_utilisateur = $1`,
-      [id]
-    );
-
-    if (!user) {
-      throw new NotFoundError('Utilisateur introuvable.');
-    }
-
-    const etatAvant = user.etat_compte;
-
-    // Mise à jour et journalisation atomique
-    await db.transaction(async (trx) => {
-      await trx.execute(
-        `UPDATE utilisateur SET etat_compte = $1 WHERE id_utilisateur = $2`,
-        [etatCompte, id]
-      );
-
-      // Si le compte est désactivé, révoquer immédiatement toutes ses sessions actives
-      if (etatCompte !== 'ACTIF') {
-        await trx.execute(
-          `UPDATE session SET est_actif = FALSE WHERE id_utilisateur = $1`,
-          [id]
-        );
-      }
-
-      // Traçabilité événementielle immuable
-      const typeEv = etatCompte === 'INACTIF' ? 'COMPTE_DESACTIVE' : 'COMPTE_MODIFIE';
-      await trx.execute(
-        `INSERT INTO evenement_metier (
-           id_evenement, type_evenement, origine, id_acteur, id_utilisateur_cible,
-           donnees_avant, donnees_apres, motif
-         ) VALUES ($1, $2, 'PORTAIL_GESTION', $3, $4, $5, $6, $7)`,
-        [
-          crypto.randomUUID(),
-          typeEv,
-          req.user!.idUtilisateur,
-          id,
-          JSON.stringify({ etatCompte: etatAvant }),
-          JSON.stringify({ etatCompte }),
-          motif || `Modification de l'état du compte par l'administrateur`,
-        ]
-      );
-    });
+    if (!updated) throw new NotFoundError('Utilisateur introuvable.');
 
     return {
       success: true,
@@ -215,37 +159,14 @@ export const utilisateursRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = req.params as { id: string };
     const { codeRole, motif } = req.body as { codeRole: string; motif?: string };
 
-    const db = getDb();
-    const role = await db.queryOne<{ id_role: string; code_role: string }>(
-      `SELECT id_role, code_role FROM role WHERE code_role = $1`,
-      [codeRole]
-    );
-
-    if (!role) {
-      throw new NotFoundError(`Rôle introuvable : ${codeRole}`);
-    }
-
-    await db.transaction(async (trx) => {
-      await trx.execute(
-        `INSERT INTO utilisateur_role (id_utilisateur, id_role, date_debut, attribue_par, motif)
-         VALUES ($1, $2, CURRENT_TIMESTAMP, $3, $4)`,
-        [id, role.id_role, req.user!.idUtilisateur, motif || null]
-      );
-
-      await trx.execute(
-        `INSERT INTO evenement_metier (
-           id_evenement, type_evenement, origine, id_acteur, id_utilisateur_cible,
-           donnees_apres, motif
-         ) VALUES ($1, 'ROLE_ATTRIBUE', 'PORTAIL_GESTION', $2, $3, $4, $5)`,
-        [
-          crypto.randomUUID(),
-          req.user!.idUtilisateur,
-          id,
-          JSON.stringify({ codeRole }),
-          motif || `Attribution du rôle ${codeRole}`,
-        ]
-      );
+    const result = await assignRole(repository, {
+      idUtilisateur: id,
+      actorId: req.user!.idUtilisateur,
+      codeRole,
+      motif: motif ?? null,
     });
+    if (result === 'USER_NOT_FOUND') throw new NotFoundError('Utilisateur introuvable.');
+    if (result === 'ROLE_NOT_FOUND') throw new NotFoundError(`Rôle introuvable : ${codeRole}`);
 
     return {
       success: true,
@@ -253,4 +174,3 @@ export const utilisateursRoutes: FastifyPluginAsync = async (fastify) => {
     };
   });
 };
-

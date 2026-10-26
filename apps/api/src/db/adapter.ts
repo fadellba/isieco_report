@@ -1,7 +1,5 @@
 /**
- * Interface d'abstraction universelle de base de données
- * Permet l'exécution transparente sur PostgreSQL 17 (DBngin / Production)
- * et sur SQLite 3 in-memory (node:sqlite) pour la suite de tests instantanés.
+ * Adaptateur SQL PostgreSQL conservé pour les tests et scripts de seed historiques.
  */
 export interface IDbAdapter {
   query<T = any>(sql: string, params?: any[]): Promise<T[]>;
@@ -10,4 +8,3 @@ export interface IDbAdapter {
   transaction<T>(callback: (trx: IDbAdapter) => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
-

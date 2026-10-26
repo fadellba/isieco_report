@@ -96,9 +96,9 @@ export const ReferentielsPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="ops-workflow-page p-6 space-y-6">
       {/* Title & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="ops-workflow-heading flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-isieco-dark flex items-center gap-2">
             <BookOpen className="h-6 w-6 text-isieco-primary" />
@@ -150,7 +150,7 @@ export const ReferentielsPage: React.FC = () => {
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-isieco-border gap-6 text-xs font-bold">
+      <div className="ops-workflow-tabs flex border-b border-isieco-border gap-6 text-xs font-bold">
         <button
           onClick={() => setActiveTab('dechets')}
           className={`pb-3 flex items-center gap-2 transition-colors border-b-2 ${

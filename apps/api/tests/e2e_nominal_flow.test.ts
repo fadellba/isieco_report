@@ -3,6 +3,8 @@ import { FastifyInstance } from 'fastify';
 import {
   createTestApp,
   cleanDatabase,
+  failBusinessEventForTest,
+  failTableWriteForTest,
   loginAs,
   TEST_PERSONAS,
   TEST_TYPES_DECHETS,
@@ -16,16 +18,37 @@ import {
   StatutSignalement,
 } from '@isieco/shared';
 import { getDb } from '../src/db/index.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import sharp from 'sharp';
+import { config } from '../src/config.js';
+
+function multipartImage(boundary: string, contents: Buffer): Buffer {
+  return Buffer.concat([
+    Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="preuve.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`,
+    ),
+    contents,
+    Buffer.from(`\r\n--${boundary}--\r\n`),
+  ]);
+}
 
 describe("Recette Finale — Test d'Acceptation T28 (Parcours Nominal Complet E2E)", () => {
   let app: FastifyInstance;
+  let uploadDirectory: string;
+  const originalUploadDirectory = config.uploadDir;
 
   beforeAll(async () => {
+    uploadDirectory = await mkdtemp(path.join(tmpdir(), 'isieco-e2e-publication-tests-'));
+    config.uploadDir = uploadDirectory;
     app = await createTestApp();
   });
 
   afterAll(async () => {
     await app.close();
+    config.uploadDir = originalUploadDirectory;
+    await rm(uploadDirectory, { recursive: true, force: true });
   });
 
   beforeEach(async () => {
@@ -43,6 +66,7 @@ describe("Recette Finale — Test d'Acceptation T28 (Parcours Nominal Complet E2
     const terrain = await loginAs(app, TEST_PERSONAS.TERRAIN.email, TEST_PERSONAS.TERRAIN.password, ClientType.MOBILE);
     const verification = await loginAs(app, TEST_PERSONAS.VERIFICATION.email);
     const decision = await loginAs(app, TEST_PERSONAS.DECISION.email);
+    const admin = await loginAs(app, TEST_PERSONAS.ADMIN.email);
 
     expect(citoyen.statusCode).toBe(200);
     expect(qualif.statusCode).toBe(200);
@@ -201,18 +225,36 @@ describe("Recette Finale — Test d'Acceptation T28 (Parcours Nominal Complet E2
     });
     expect(startInterv.statusCode).toBe(200);
 
-    // Dépôt de photo de fin de chantier
-    const photoInterv = await app.inject({
+    const chantierPhoto = await sharp({
+      create: { width: 16, height: 16, channels: 3, background: '#16a34a' },
+    }).jpeg().toBuffer();
+    const beforeBoundary = 'isieco-e2e-before-photo';
+    const beforePhoto = await app.inject({
       method: 'POST',
-      url: `/api/interventions/${idIntervention}/photos`,
-      headers: terrain.headers,
-      payload: {
-        referencePhoto: 'photos/chantiers/carnot_faidherbe_clean.jpg',
-        contextePhoto: 'FIN_INTERVENTION',
-        description: 'Trottoir entièrement dégagé et balayé',
+      url: `/api/interventions/${idIntervention}/photos/contenu`,
+      headers: {
+        ...terrain.headers,
+        'content-type': `multipart/form-data; boundary=${beforeBoundary}`,
       },
+      payload: multipartImage(beforeBoundary, chantierPhoto),
     });
-    expect(photoInterv.statusCode).toBe(201);
+    expect(beforePhoto.statusCode).toBe(201);
+    const afterBoundary = 'isieco-e2e-after-photo';
+    const afterPhoto = await app.inject({
+      method: 'POST',
+      url: `/api/interventions/${idIntervention}/photos/contenu`,
+      headers: {
+        ...terrain.headers,
+        'content-type': `multipart/form-data; boundary=${afterBoundary}`,
+      },
+      payload: multipartImage(afterBoundary, chantierPhoto),
+    });
+    expect(afterPhoto.statusCode).toBe(201);
+    await getDb().execute(
+      `UPDATE photo_intervention SET contexte_photo = 'CONSTAT_INITIAL'
+       WHERE id_photo_intervention = $1`,
+      [beforePhoto.json().idPhoto],
+    );
 
     // Déclaration de fin d'intervention avec compte-rendu
     const endInterv = await app.inject({
@@ -252,6 +294,156 @@ describe("Recette Finale — Test d'Acceptation T28 (Parcours Nominal Complet E2
     expect(clotureRes.statusCode).toBe(200);
     expect(clotureRes.json().statutDossier).toBe(StatutDossier.CLOS_RESOLUTION_CONFIRMEE);
 
+    await getDb().execute(
+      `INSERT INTO utilisateur_role (id_utilisateur, id_role, attribue_par, motif)
+       SELECT $1, id_role, $2, 'Validation indépendante temporaire pour test publication dossier'
+       FROM role WHERE code_role = 'DECISION'`,
+      [TEST_PERSONAS.ADMIN.id, TEST_PERSONAS.ADMIN.id],
+    );
+    try {
+      const distinctDecision = await loginAs(app, TEST_PERSONAS.ADMIN.email);
+      for (const photoId of [beforePhoto.json().idPhoto, afterPhoto.json().idPhoto] as string[]) {
+        const boundary = `isieco-e2e-variant-${photoId}`;
+        const removeSubmissionFailure = await failBusinessEventForTest(
+          'VARIANTE_PHOTO_SOUMISE',
+        );
+        try {
+          const failedVariant = await app.inject({
+            method: 'POST',
+            url: `/api/publications/photos/INTERVENTION/${photoId}/variante`,
+            headers: {
+              ...traitement.headers,
+              'content-type': `multipart/form-data; boundary=${boundary}`,
+              'x-redaction-checks-confirmed': 'true',
+            },
+            payload: multipartImage(boundary, chantierPhoto),
+          });
+          expect(failedVariant.statusCode).toBe(500);
+        } finally {
+          await removeSubmissionFailure();
+        }
+        const unchangedPhoto = await getDb().queryOne<{
+          etat_publication: string;
+          reference_photo_publique: string | null;
+        }>(
+          `SELECT etat_publication, reference_photo_publique
+           FROM photo_intervention WHERE id_photo_intervention = $1`,
+          [photoId],
+        );
+        expect(unchangedPhoto?.etat_publication).toBe('INTERNE');
+        expect(unchangedPhoto?.reference_photo_publique).toBeNull();
+
+        const variant = await app.inject({
+          method: 'POST',
+          url: `/api/publications/photos/INTERVENTION/${photoId}/variante`,
+          headers: {
+            ...traitement.headers,
+            'content-type': `multipart/form-data; boundary=${boundary}`,
+            'x-redaction-checks-confirmed': 'true',
+          },
+          payload: multipartImage(boundary, chantierPhoto),
+        });
+        expect(variant.statusCode).toBe(202);
+        const removeApprovalFailure = await failBusinessEventForTest(
+          'VARIANTE_PHOTO_APPROUVEE',
+        );
+        try {
+          const failedApproval = await app.inject({
+            method: 'POST',
+            url: `/api/publications/moderation/photos/INTERVENTION/${photoId}/decision`,
+            headers: decision.headers,
+            payload: { decision: 'APPROUVEE' },
+          });
+          expect(failedApproval.statusCode).toBe(500);
+        } finally {
+          await removeApprovalFailure();
+        }
+        const pendingPhoto = await getDb().queryOne<{
+          etat_publication: string;
+        }>(
+          'SELECT etat_publication FROM photo_intervention WHERE id_photo_intervention = $1',
+          [photoId],
+        );
+        expect(pendingPhoto?.etat_publication).toBe('EN_ATTENTE');
+
+        const variantApproval = await app.inject({
+          method: 'POST',
+          url: `/api/publications/moderation/photos/INTERVENTION/${photoId}/decision`,
+          headers: decision.headers,
+          payload: { decision: 'APPROUVEE' },
+        });
+        expect(variantApproval.statusCode).toBe(200);
+      }
+
+      const removePublicationFailure = await failTableWriteForTest(
+        'photo_publication',
+      );
+      try {
+        const failedPublication = await app.inject({
+          method: 'POST',
+          url: `/api/publications/dossiers/${idDossier}`,
+          headers: traitement.headers,
+          payload: {
+            photos: [
+              { idPhoto: beforePhoto.json().idPhoto, role: 'AVANT' },
+              { idPhoto: afterPhoto.json().idPhoto, role: 'APRES' },
+            ],
+          },
+        });
+        expect(failedPublication.statusCode).toBe(500);
+      } finally {
+        await removePublicationFailure();
+      }
+      const orphanedPublication = await getDb().queryOne<{ count: string }>(
+        'SELECT count(*)::text AS count FROM publication_flux WHERE id_dossier = $1',
+        [idDossier],
+      );
+      expect(orphanedPublication?.count).toBe('0');
+
+      const publication = await app.inject({
+        method: 'POST',
+        url: `/api/publications/dossiers/${idDossier}`,
+        headers: traitement.headers,
+        payload: {
+          photos: [
+            { idPhoto: beforePhoto.json().idPhoto, role: 'AVANT' },
+            { idPhoto: afterPhoto.json().idPhoto, role: 'APRES' },
+          ],
+        },
+      });
+      expect(publication.statusCode).toBe(201);
+      const idPublication = publication.json().idPublication as string;
+
+      const sameModerator = await app.inject({
+        method: 'POST',
+        url: `/api/publications/${idPublication}/decision`,
+        headers: decision.headers,
+        payload: { decision: 'APPROUVEE' },
+      });
+      expect(sameModerator.statusCode).toBe(403);
+
+      const publicationApproval = await app.inject({
+        method: 'POST',
+        url: `/api/publications/${idPublication}/decision`,
+        headers: distinctDecision.headers,
+        payload: { decision: 'APPROUVEE' },
+      });
+      expect(publicationApproval.statusCode).toBe(200);
+      const publicFeed = await app.inject({ method: 'GET', url: '/api/publications/public' });
+      expect(publicFeed.statusCode).toBe(200);
+      expect(publicFeed.json().data[0].photos).toHaveLength(2);
+      for (const photo of publicFeed.json().data[0].photos as Array<{ reference: string }>) {
+        expect((await app.inject({ method: 'GET', url: photo.reference })).statusCode).toBe(200);
+      }
+    } finally {
+      await getDb().execute(
+        `DELETE FROM utilisateur_role
+         WHERE id_utilisateur = $1
+           AND id_role = (SELECT id_role FROM role WHERE code_role = 'DECISION')`,
+        [TEST_PERSONAS.ADMIN.id],
+      );
+    }
+
     // ------------------------------------------------------------------------
     // Étape 8 : Consultation Citoyenne de la Résolution & Notifications
     // ------------------------------------------------------------------------
@@ -278,7 +470,7 @@ describe("Recette Finale — Test d'Acceptation T28 (Parcours Nominal Complet E2
     const auditRes = await app.inject({
       method: 'GET',
       url: '/api/evenements/audit-trail?limit=50',
-      headers: decision.headers,
+      headers: admin.headers,
     });
     expect(auditRes.statusCode).toBe(200);
     const evts = auditRes.json().data;

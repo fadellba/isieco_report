@@ -134,6 +134,43 @@ describe('Jalon M6 (Tranche 5) — Audit Immuable, Idempotence & Intégrité des
     expect(resDoubleTarget.json().error.message).toMatch(/plusieurs entités/i);
   });
 
+  it('filtre les événements demandés par les droits du rôle sans les remplacer par le filtre utilisateur', async () => {
+    const admin = await loginAs(app, TEST_PERSONAS.ADMIN.email);
+    const qualification = await loginAs(app, TEST_PERSONAS.QUALIFICATION.email);
+    const idDossier = await createDossier();
+
+    for (const typeEvenement of ['DOSSIER_CREE', 'SIGNALEMENT_RECU']) {
+      const created = await app.inject({
+        method: 'POST',
+        url: '/api/evenements',
+        headers: admin.headers,
+        payload: {
+          typeEvenement,
+          idDossierCible: idDossier,
+          motif: `Événement de test ${typeEvenement}`,
+        },
+      });
+      expect(created.statusCode).toBe(201);
+    }
+
+    const hidden = await app.inject({
+      method: 'GET',
+      url: '/api/evenements/audit-trail?typeEvenement=DOSSIER_CREE',
+      headers: qualification.headers,
+    });
+    expect(hidden.statusCode).toBe(200);
+    expect(hidden.json().data).toHaveLength(0);
+
+    const visible = await app.inject({
+      method: 'GET',
+      url: '/api/evenements/audit-trail?typeEvenement=SIGNALEMENT_RECU',
+      headers: qualification.headers,
+    });
+    expect(visible.statusCode).toBe(200);
+    expect(visible.json().data.map((event: { typeEvenement: string }) => event.typeEvenement))
+      .toEqual(['SIGNALEMENT_RECU']);
+  });
+
   // --------------------------------------------------------------------------
   // Tests T33 & T34 : Validation de la cible composite CONTENU_DOSSIER
   // --------------------------------------------------------------------------
@@ -279,7 +316,10 @@ describe('Jalon M6 (Tranche 5) — Audit Immuable, Idempotence & Intégrité des
         descriptionSynthese: 'Dossier Test Statut Recalculé',
         latitude: 14.6711,
         longitude: -17.433,
-        categories: [{ idTypeDechet: TEST_TYPES_DECHETS.PLASTIQUE }],
+        categories: [
+          { idTypeDechet: TEST_TYPES_DECHETS.PLASTIQUE },
+          { idTypeDechet: TEST_TYPES_DECHETS.ORGANIQUE },
+        ],
       },
     });
     const idDossier = dos.json().idDossier;
@@ -290,8 +330,16 @@ describe('Jalon M6 (Tranche 5) — Audit Immuable, Idempotence & Intégrité des
       [idDossier]
     );
     expect(avantAff!.statut_dossier).toBe(StatutDossier.EN_ATTENTE_AFFECTATION);
+    await db.execute(
+      `UPDATE contenu_dossier
+       SET etat_prise_en_charge = 'EN_ATTENTE_EQUIPE',
+           date_attente_equipe = CURRENT_TIMESTAMP,
+           motif_attente_equipe = 'Équipe indisponible au premier passage'
+       WHERE id_dossier = $1 AND id_type_dechet = $2`,
+      [idDossier, TEST_TYPES_DECHETS.PLASTIQUE],
+    );
 
-    // 2. Affectation de l'équipe -> Statut bascule atomiquement à EN_COURS_DE_TRAITEMENT
+    // 2. Un volet non affecté garde le statut global en attente après la première affectation.
     await app.inject({
       method: 'POST',
       url: '/api/affectations',
@@ -303,11 +351,81 @@ describe('Jalon M6 (Tranche 5) — Audit Immuable, Idempotence & Intégrité des
         idCompetenceEquipe: TEST_EQUIPES.PLASTIQUE_PLATEAU.competencePlastique,
       },
     });
+    const apresPremiereAff = await db.queryOne<{
+      statut_dossier: string;
+      etat_prise_en_charge: string;
+      date_attente_equipe: Date | null;
+      motif_attente_equipe: string | null;
+    }>(
+      `SELECT d.statut_dossier, c.etat_prise_en_charge, c.date_attente_equipe, c.motif_attente_equipe
+       FROM dossier_traitement d
+       JOIN contenu_dossier c ON c.id_dossier = d.id_dossier
+       WHERE d.id_dossier = $1 AND c.id_type_dechet = $2`,
+      [idDossier, TEST_TYPES_DECHETS.PLASTIQUE],
+    );
+    expect(apresPremiereAff).toMatchObject({
+      statut_dossier: StatutDossier.EN_ATTENTE_AFFECTATION,
+      etat_prise_en_charge: 'AFFECTEE',
+      date_attente_equipe: null,
+      motif_attente_equipe: null,
+    });
+
+    // 3. Lorsque tous les volets sont affectés, le dossier passe en traitement.
+    await app.inject({
+      method: 'POST',
+      url: '/api/affectations',
+      headers: affectation.headers,
+      payload: {
+        idDossier,
+        idTypeDechet: TEST_TYPES_DECHETS.ORGANIQUE,
+        idEquipe: TEST_EQUIPES.BIO_MEDINA.id,
+        idCompetenceEquipe: TEST_EQUIPES.BIO_MEDINA.competenceOrganique,
+      },
+    });
 
     const apresAff = await db.queryOne<{ statut_dossier: string }>(
       `SELECT statut_dossier FROM dossier_traitement WHERE id_dossier = $1`,
       [idDossier]
     );
     expect(apresAff!.statut_dossier).toBe(StatutDossier.EN_COURS_DE_TRAITEMENT);
+
+    await db.execute(
+      `UPDATE contenu_dossier
+       SET etat_prise_en_charge = CASE
+         WHEN id_type_dechet = $2 THEN 'A_VERIFIER'
+         ELSE 'AFFECTEE'
+       END
+       WHERE id_dossier = $1`,
+      [idDossier, TEST_TYPES_DECHETS.PLASTIQUE],
+    );
+    const activeWorkWins = await db.queryOne<{ statut_dossier: string }>(
+      `SELECT recalculer_statut_dossier($1) AS statut_dossier`,
+      [idDossier],
+    );
+    expect(activeWorkWins!.statut_dossier).toBe(StatutDossier.EN_COURS_DE_TRAITEMENT);
+
+    await db.execute(
+      `UPDATE contenu_dossier
+       SET etat_prise_en_charge = 'TERMINEE'
+       WHERE id_dossier = $1 AND id_type_dechet = $2`,
+      [idDossier, TEST_TYPES_DECHETS.ORGANIQUE],
+    );
+    const verificationPending = await db.queryOne<{ statut_dossier: string }>(
+      `SELECT recalculer_statut_dossier($1) AS statut_dossier`,
+      [idDossier],
+    );
+    expect(verificationPending!.statut_dossier).toBe(StatutDossier.EN_ATTENTE_VERIFICATION);
+
+    await db.execute(
+      `UPDATE contenu_dossier
+       SET etat_prise_en_charge = 'TERMINEE'
+       WHERE id_dossier = $1 AND id_type_dechet = $2`,
+      [idDossier, TEST_TYPES_DECHETS.PLASTIQUE],
+    );
+    const readyToClose = await db.queryOne<{ statut_dossier: string }>(
+      `SELECT recalculer_statut_dossier($1) AS statut_dossier`,
+      [idDossier],
+    );
+    expect(readyToClose!.statut_dossier).toBe(StatutDossier.EN_ATTENTE_VERIFICATION);
   });
 });

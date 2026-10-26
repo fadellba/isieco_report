@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import Constants from 'expo-constants';
+import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import {
   MobileUser,
@@ -18,43 +19,128 @@ const USER_STORAGE_KEY = '@isieco_mobile_user';
 const API_URL_KEY = '@isieco_custom_api_url';
 const TYPES_DECHETS_CACHE_KEY = '@isieco_types_dechets_cache_v1';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 let currentToken: string | null = null;
-let customApiBaseUrl: string =
-  (Platform.OS === 'web'
-    ? Constants.expoConfig?.extra?.apiUrlWeb
-    : Constants.expoConfig?.extra?.apiUrl) || 'http://localhost:3001';
+const appExtra = Constants.expoConfig?.extra;
+const isProductionBuild = appExtra?.apiEnvironment === 'production';
+
+function normalizeApiBaseUrl(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('L’URL de l’API doit être valide.');
+  }
+  if (
+    !['http:', 'https:'].includes(url.protocol) ||
+    url.username ||
+    url.password ||
+    url.pathname !== '/' ||
+    url.search ||
+    url.hash ||
+    (isProductionBuild && url.protocol !== 'https:')
+  ) {
+    throw new Error('L’URL de l’API doit utiliser HTTPS en production et ne contenir aucun identifiant.');
+  }
+  if (isProductionBuild) {
+    const trustedOrigins = [appExtra?.apiUrl, appExtra?.apiUrlWeb]
+      .filter((origin): origin is string => typeof origin === 'string')
+      .map((origin) => new URL(origin).origin);
+    if (!trustedOrigins.includes(url.origin)) {
+      throw new Error('Cette URL ne correspond pas à l’API approuvée par cette version.');
+    }
+  }
+  return url.origin;
+}
+
+let customApiBaseUrl = normalizeApiBaseUrl(
+  (Platform.OS === 'web' ? appExtra?.apiUrlWeb : appExtra?.apiUrl) || 'http://localhost:3001',
+);
+
+async function readStoredToken(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    return AsyncStorage.getItem(TOKEN_STORAGE_KEY);
+  }
+
+  const secureToken = await SecureStore.getItemAsync(TOKEN_STORAGE_KEY);
+  if (secureToken) return secureToken;
+
+  const legacyToken = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
+  if (legacyToken) {
+    await SecureStore.setItemAsync(TOKEN_STORAGE_KEY, legacyToken);
+    await AsyncStorage.removeItem(TOKEN_STORAGE_KEY);
+  }
+  return legacyToken;
+}
+
+async function writeStoredToken(token: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    await AsyncStorage.setItem(TOKEN_STORAGE_KEY, token);
+    return;
+  }
+  await SecureStore.setItemAsync(TOKEN_STORAGE_KEY, token);
+}
+
+async function deleteStoredToken(): Promise<void> {
+  if (Platform.OS === 'web') {
+    await AsyncStorage.removeItem(TOKEN_STORAGE_KEY);
+    return;
+  }
+  await SecureStore.deleteItemAsync(TOKEN_STORAGE_KEY);
+  await AsyncStorage.removeItem(TOKEN_STORAGE_KEY);
+}
 
 export const setApiBaseUrl = async (url: string) => {
-  customApiBaseUrl = url.replace(/\/$/, '');
+  customApiBaseUrl = normalizeApiBaseUrl(url);
   await AsyncStorage.setItem(API_URL_KEY, customApiBaseUrl);
 };
 
 export const getApiBaseUrl = () => customApiBaseUrl;
 
 export const loadStoredAuth = async (): Promise<{ token: string | null; user: MobileUser | null }> => {
-  try {
-    const savedUrl = await AsyncStorage.getItem(API_URL_KEY);
-    if (savedUrl) customApiBaseUrl = savedUrl;
+  const savedUrl = await AsyncStorage.getItem(API_URL_KEY);
+  if (savedUrl) customApiBaseUrl = normalizeApiBaseUrl(savedUrl);
 
-    const token = await AsyncStorage.getItem(TOKEN_STORAGE_KEY);
-    const userStr = await AsyncStorage.getItem(USER_STORAGE_KEY);
-    currentToken = token;
-    const user = userStr ? JSON.parse(userStr) : null;
-    return { token, user };
-  } catch {
-    return { token: null, user: null };
+  const token = await readStoredToken();
+  const userStr = await AsyncStorage.getItem(USER_STORAGE_KEY);
+  currentToken = token;
+  const user = token && userStr ? JSON.parse(userStr) as MobileUser : null;
+  if (!token && userStr) {
+    await AsyncStorage.removeItem(USER_STORAGE_KEY);
   }
+  return { token, user };
+};
+
+export const getStoredAuthUserId = async (): Promise<string | null> => {
+  const userStr = await AsyncStorage.getItem(USER_STORAGE_KEY);
+  if (!userStr) return null;
+
+  const user: unknown = JSON.parse(userStr);
+  if (!isRecord(user) || typeof user.idUtilisateur !== 'string' || !user.idUtilisateur) {
+    throw new Error('Le profil local est invalide. Reconnectez-vous avant de synchroniser.');
+  }
+  return user.idUtilisateur;
 };
 
 export const saveAuthSession = async (token: string, user: MobileUser) => {
-  currentToken = token;
-  await AsyncStorage.setItem(TOKEN_STORAGE_KEY, token);
-  await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+  try {
+    await writeStoredToken(token);
+    await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+    currentToken = token;
+  } catch (error) {
+    currentToken = null;
+    await deleteStoredToken();
+    await AsyncStorage.removeItem(USER_STORAGE_KEY);
+    throw error;
+  }
 };
 
 export const clearAuthSession = async () => {
   currentToken = null;
-  await AsyncStorage.removeItem(TOKEN_STORAGE_KEY);
+  await deleteStoredToken();
   await AsyncStorage.removeItem(USER_STORAGE_KEY);
 };
 
@@ -64,7 +150,7 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
   const url = `${customApiBaseUrl}/api${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(options.body != null ? { 'Content-Type': 'application/json' } : {}),
     ...(currentToken ? { Authorization: `Bearer ${currentToken}` } : {}),
     ...(options.headers as Record<string, string> || {}),
   };
@@ -85,6 +171,49 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
 }
 
 async function uploadPhoto(endpoint: string, photoUri: string) {
+  if (Platform.OS === 'web') {
+    const photoResponse = await fetch(photoUri);
+    if (!photoResponse.ok) {
+      throw new Error('Impossible de lire la photo sélectionnée.');
+    }
+
+    const photoBlob = await photoResponse.blob();
+    const extensions: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+    };
+    const extension = extensions[photoBlob.type.toLowerCase()];
+    if (!extension) {
+      throw new Error('Format de photo non pris en charge. Utilisez une image JPEG, PNG ou WebP.');
+    }
+
+    const formData = new FormData();
+    formData.append('file', photoBlob, `intervention.${extension}`);
+    const headers: Record<string, string> = {};
+    if (currentToken) headers.Authorization = ['Bearer', currentToken].join(' ');
+    const response = await fetch(`${customApiBaseUrl}/api${endpoint}`, {
+      method: 'POST',
+      body: formData,
+      headers,
+    });
+    const data = await response.json().catch(() => null) as {
+      error?: { message?: string };
+      message?: string;
+      success?: boolean;
+      idPhoto?: string;
+      referencePhoto?: string;
+    } | null;
+
+    if (!response.ok) {
+      throw new Error(data?.error?.message || data?.message || `Erreur serveur (${response.status})`);
+    }
+    if (!data?.success || !data.idPhoto || !data.referencePhoto) {
+      throw new Error('Réponse invalide du serveur lors de la transmission de la photo.');
+    }
+    return { success: data.success, idPhoto: data.idPhoto, referencePhoto: data.referencePhoto };
+  }
+
   const extension = photoUri.split(/[?#]/, 1)[0].split('.').pop()?.toLowerCase();
   const mimeType =
     extension === 'png'
@@ -134,21 +263,19 @@ export const mobileApi = {
       const res = await request<{
         success: boolean;
         token: string;
-        utilisateur: MobileUser;
+        user: MobileUser;
       }>('/auth/connexion', {
         method: 'POST',
-        body: JSON.stringify({ email, motDePasse }),
+        body: JSON.stringify({ email, password: motDePasse }),
       });
-      if (res.token && res.utilisateur) {
-        await saveAuthSession(res.token, res.utilisateur);
+      if (res.token && res.user) {
+        await saveAuthSession(res.token, res.user);
       }
       return res;
     },
     logout: async () => {
       try {
         await request('/auth/deconnexion', { method: 'POST' });
-      } catch {
-        // ignore network error on logout
       } finally {
         await clearAuthSession();
       }
@@ -185,11 +312,14 @@ export const mobileApi = {
   },
 
   signalements: {
-    create: async (draft: SignalementDraft) => {
+    create: async (draft: SignalementDraft, idempotencyKey?: string) => {
       const res = await request<{ success: boolean; idSignalement: string; message: string }>(
         '/signalements',
         {
           method: 'POST',
+          headers: idempotencyKey
+            ? { 'Idempotency-Key': idempotencyKey }
+            : undefined,
           body: JSON.stringify({
             description: draft.description,
             latitude: draft.latitude,

@@ -1,0 +1,766 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Affectation {
+  idAffectation                                 String                   @id @default(dbgenerated("gen_random_uuid()")) @map("id_affectation") @db.Uuid
+  idDossier                                     String                   @map("id_dossier") @db.Uuid
+  idTypeDechet                                  String                   @map("id_type_dechet") @db.Uuid
+  idEquipe                                      String                   @map("id_equipe") @db.Uuid
+  idCompetenceEquipe                            String                   @map("id_competence_equipe") @db.Uuid
+  dateHeureAffectation                          DateTime                 @default(now()) @map("date_heure_affectation") @db.Timestamptz(6)
+  idDecideur                                    String                   @map("id_decideur") @db.Uuid
+  etatAffectation                               String                   @default("ACTIVE") @map("etat_affectation") @db.VarChar(20)
+  motif                                         String?                  @db.Text
+  observation                                   String?                  @db.Text
+  dateFinAffectation                            DateTime?                @map("date_fin_affectation") @db.Timestamptz(6)
+  decisionEquipe                                String                   @default("EN_ATTENTE") @map("decision_equipe") @db.VarChar(20)
+  reponduPar                                    String?                  @map("repondu_par") @db.Uuid
+  dateReponseEquipe                             DateTime?                @map("date_reponse_equipe") @db.Timestamptz(6)
+  motifRefusEquipe                              String?                  @map("motif_refus_equipe") @db.Text
+  referenceOperationUnique                      String?                  @unique @map("reference_operation_unique") @db.VarChar(100)
+  competenceEquipe                              CompetenceEquipe         @relation(fields: [idCompetenceEquipe, idEquipe, idTypeDechet], references: [idCompetenceEquipe, idEquipe, idTypeDechet], onUpdate: NoAction, map: "fk_affectation_competence_equipe")
+  contenuDossier                                ContenuDossier           @relation(fields: [idDossier, idTypeDechet], references: [idDossier, idTypeDechet], onUpdate: NoAction, map: "fk_affectation_contenu_dossier")
+  utilisateurAffectationReponduParToutilisateur Utilisateur?             @relation("affectation_repondu_parToutilisateur", fields: [reponduPar], references: [idUtilisateur], onDelete: Restrict, onUpdate: NoAction)
+  utilisateurAffectationIdDecideurToutilisateur Utilisateur              @relation("affectation_id_decideurToutilisateur", fields: [idDecideur], references: [idUtilisateur], onUpdate: NoAction)
+  equipe                                        Equipe                   @relation(fields: [idEquipe], references: [idEquipe], onUpdate: NoAction)
+  evenementMetier                               EvenementMetier[]
+  intervention                                  Intervention[]
+  verificationResolution                        VerificationResolution[]
+
+  @@map("affectation")
+}
+
+model AppartenanceEquipe {
+  idUtilisateur            String                     @map("id_utilisateur") @db.Uuid
+  idEquipe                 String                     @map("id_equipe") @db.Uuid
+  dateDebut                DateTime                   @default(now()) @map("date_debut") @db.Timestamptz(6)
+  dateFin                  DateTime?                  @map("date_fin") @db.Timestamptz(6)
+  fonction                 String                     @default("AGENT_TERRAIN") @db.VarChar(100)
+  equipe                   Equipe                     @relation(fields: [idEquipe], references: [idEquipe], onDelete: Cascade, onUpdate: NoAction)
+  utilisateur              Utilisateur                @relation(fields: [idUtilisateur], references: [idUtilisateur], onDelete: Cascade, onUpdate: NoAction)
+  delegationDecisionEquipe DelegationDecisionEquipe[]
+
+  @@id([idUtilisateur, idEquipe, dateDebut], map: "pk_appartenance_equipe")
+  @@map("appartenance_equipe")
+}
+
+model Badge {
+  idBadge          String             @id @default(dbgenerated("gen_random_uuid()")) @map("id_badge") @db.Uuid
+  codeBadge        String             @unique @map("code_badge") @db.VarChar(50)
+  libelle          String             @db.VarChar(100)
+  description      String?            @db.Text
+  actif            Boolean            @default(true) @db.Boolean
+  badgeUtilisateur BadgeUtilisateur[]
+
+  @@map("badge")
+}
+
+model BadgeUtilisateur {
+  idUtilisateur                                         String       @map("id_utilisateur") @db.Uuid
+  idBadge                                               String       @map("id_badge") @db.Uuid
+  dateAttribution                                       DateTime     @default(now()) @map("date_attribution") @db.Timestamptz(6)
+  attribuePar                                           String?      @map("attribue_par") @db.Uuid
+  motif                                                 String?      @db.Text
+  utilisateurBadgeUtilisateurAttribueParToutilisateur   Utilisateur? @relation("badge_utilisateur_attribue_parToutilisateur", fields: [attribuePar], references: [idUtilisateur], onUpdate: NoAction)
+  badge                                                 Badge        @relation(fields: [idBadge], references: [idBadge], onUpdate: NoAction)
+  utilisateurBadgeUtilisateurIdUtilisateurToutilisateur Utilisateur  @relation("badge_utilisateur_id_utilisateurToutilisateur", fields: [idUtilisateur], references: [idUtilisateur], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([idUtilisateur, idBadge])
+  @@map("badge_utilisateur")
+}
+
+model Commune {
+  idCommune                     String                          @id @default(dbgenerated("gen_random_uuid()")) @map("id_commune") @db.Uuid
+  idDepartement                 String                          @map("id_departement") @db.Uuid
+  codeCommune                   String?                         @map("code_commune") @db.VarChar(30)
+  nomCommune                    String                          @map("nom_commune") @db.VarChar(120)
+  actif                         Boolean                         @default(true) @db.Boolean
+  departement                   Departement                     @relation(fields: [idDepartement], references: [idDepartement], onUpdate: NoAction)
+  dossierTraitement             DossierTraitement[]
+  historiqueLocalisationDossier HistoriqueLocalisationDossier[]
+  signalement                   Signalement[]
+
+  @@unique([idCommune, idDepartement], map: "uq_commune_departement_id")
+  @@unique([idDepartement, codeCommune], map: "uq_commune_departement_code")
+  @@unique([idDepartement, nomCommune], map: "uq_commune_departement_nom")
+  @@map("commune")
+}
+
+model CompetenceEquipe {
+  idCompetenceEquipe String            @id @default(dbgenerated("gen_random_uuid()")) @map("id_competence_equipe") @db.Uuid
+  idEquipe           String            @map("id_equipe") @db.Uuid
+  idTypeDechet       String            @map("id_type_dechet") @db.Uuid
+  dateDebut          DateTime          @default(now()) @map("date_debut") @db.Timestamptz(6)
+  dateFin            DateTime?         @map("date_fin") @db.Timestamptz(6)
+  commentaire        String?           @db.Text
+  valideePar         String?           @map("validee_par") @db.Uuid
+  affectation        Affectation[]
+  utilisateur        Utilisateur?      @relation(fields: [valideePar], references: [idUtilisateur], onUpdate: NoAction)
+  typeDechet         TypeDechet        @relation(fields: [idTypeDechet], references: [idTypeDechet], onUpdate: NoAction)
+  equipe             Equipe            @relation(fields: [idEquipe], references: [idEquipe], onDelete: Cascade, onUpdate: NoAction)
+  evenementMetier    EvenementMetier[]
+
+  @@unique([idCompetenceEquipe, idEquipe, idTypeDechet], map: "uq_competence_equipe_composition")
+  @@unique([idEquipe, idTypeDechet, dateDebut], map: "uq_competence_equipe_triplet")
+  @@map("competence_equipe")
+}
+
+model ContenuDossier {
+  idDossier                                         String                     @map("id_dossier") @db.Uuid
+  idTypeDechet                                      String                     @map("id_type_dechet") @db.Uuid
+  quantiteEstimee                                   Decimal?                   @map("quantite_estimee") @db.Decimal(12, 3)
+  uniteQuantite                                     String?                    @map("unite_quantite") @db.VarChar(30)
+  quantiteEstimeeLegacy                             String?                    @map("quantite_estimee_legacy") @db.VarChar(50)
+  volumeEstime                                      String?                    @map("volume_estime") @db.VarChar(50)
+  niveauRisqueQualifie                              String?                    @default("MOYEN") @map("niveau_risqu_qualifie") @db.VarChar(20)
+  remarque                                          String?                    @db.Text
+  qualifiePar                                       String?                    @map("qualifie_par") @db.Uuid
+  dateQualification                                 DateTime?                  @map("date_qualification") @db.Timestamptz(6)
+  etatContenuDossier                                String                     @default("INCLUSE") @map("etat_contenu_dossier") @db.VarChar(20)
+  etatPriseEnCharge                                 String                     @default("A_AFFECTER") @map("etat_prise_en_charge") @db.VarChar(25)
+  dateAttenteEquipe                                 DateTime?                  @map("date_attente_equipe") @db.Timestamptz(6)
+  motifAttenteEquipe                                String?                    @map("motif_attente_equipe") @db.Text
+  dateRetrait                                       DateTime?                  @map("date_retrait") @db.Timestamptz(6)
+  retirePar                                         String?                    @map("retire_par") @db.Uuid
+  motifRetrait                                      String?                    @map("motif_retrait") @db.Text
+  origineAjout                                      String                     @default("AJOUT_MANUEL") @map("origine_ajout") @db.VarChar(30)
+  motifAjout                                        String?                    @map("motif_ajout") @db.Text
+  affectation                                       Affectation[]
+  utilisateurContenuDossierRetireParToutilisateur   Utilisateur?               @relation("contenu_dossier_retire_parToutilisateur", fields: [retirePar], references: [idUtilisateur], onUpdate: NoAction)
+  utilisateurContenuDossierQualifieParToutilisateur Utilisateur?               @relation("contenu_dossier_qualifie_parToutilisateur", fields: [qualifiePar], references: [idUtilisateur], onUpdate: NoAction)
+  typeDechet                                        TypeDechet                 @relation(fields: [idTypeDechet], references: [idTypeDechet], onUpdate: NoAction)
+  dossierTraitement                                 DossierTraitement          @relation(fields: [idDossier], references: [idDossier], onDelete: Cascade, onUpdate: NoAction)
+  evenementMetier                                   EvenementMetier[]
+  provenanceContenuDossier                          ProvenanceContenuDossier[]
+
+  @@id([idDossier, idTypeDechet], map: "pk_contenu_dossier")
+  @@map("contenu_dossier")
+}
+
+model DelegationDecisionEquipe {
+  idDelegation          String             @id @default(dbgenerated("gen_random_uuid()")) @map("id_delegation") @db.Uuid
+  idEquipe              String             @map("id_equipe") @db.Uuid
+  idUtilisateurDelegue  String             @map("id_utilisateur_delegue") @db.Uuid
+  dateDebutAppartenance DateTime           @map("date_debut_appartenance") @db.Timestamptz(6)
+  typeDecision          String             @map("type_decision") @db.VarChar(40)
+  deleguePar            String             @map("delegue_par") @db.Uuid
+  dateDebut             DateTime           @default(now()) @map("date_debut") @db.Timestamptz(6)
+  dateFin               DateTime?          @map("date_fin") @db.Timestamptz(6)
+  motif                 String?            @db.Text
+  appartenanceEquipe    AppartenanceEquipe @relation(fields: [idUtilisateurDelegue, idEquipe, dateDebutAppartenance], references: [idUtilisateur, idEquipe, dateDebut], onUpdate: NoAction, map: "fk_delegation_membre")
+  utilisateur           Utilisateur        @relation(fields: [deleguePar], references: [idUtilisateur], onUpdate: NoAction)
+  equipe                Equipe             @relation(fields: [idEquipe], references: [idEquipe], onUpdate: NoAction)
+
+  @@unique([idEquipe, idUtilisateurDelegue, typeDecision, dateDebut], map: "uq_delegation_debut")
+  @@map("delegation_decision_equipe")
+}
+
+model Departement {
+  idDepartement   String    @id @default(dbgenerated("gen_random_uuid()")) @map("id_departement") @db.Uuid
+  idRegion        String    @map("id_region") @db.Uuid
+  codeDepartement String?   @map("code_departement") @db.VarChar(30)
+  nomDepartement  String    @map("nom_departement") @db.VarChar(120)
+  actif           Boolean   @default(true) @db.Boolean
+  commune         Commune[]
+  region          Region    @relation(fields: [idRegion], references: [idRegion], onUpdate: NoAction)
+
+  @@unique([idDepartement, idRegion], map: "uq_departement_region_id")
+  @@unique([idRegion, codeDepartement], map: "uq_departement_region_code")
+  @@unique([idRegion, nomDepartement], map: "uq_departement_region_nom")
+  @@map("departement")
+}
+
+model DisponibiliteEquipe {
+  idEquipe          String      @id @map("id_equipe") @db.Uuid
+  etatDisponibilite String      @map("etat_disponibilite") @db.VarChar(20)
+  miseAJourPar      String      @map("mise_a_jour_par") @db.Uuid
+  dateMiseAJour     DateTime    @default(now()) @map("date_mise_a_jour") @db.Timestamptz(6)
+  valideJusqua      DateTime    @map("valide_jusqua") @db.Timestamptz(6)
+  commentaire       String?     @db.Text
+  utilisateur       Utilisateur @relation(fields: [miseAJourPar], references: [idUtilisateur], onUpdate: NoAction)
+  equipe            Equipe?     @relation(fields: [idEquipe], references: [idEquipe], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("disponibilite_equipe")
+}
+
+model DossierTraitement {
+  idDossier                     String                          @id @default(dbgenerated("gen_random_uuid()")) @map("id_dossier") @db.Uuid
+  referenceDossier              String                          @unique @map("reference_dossier") @db.VarChar(50)
+  descriptionSynthese           String                          @map("description_synthese") @db.Text
+  dateCreationDossier           DateTime                        @default(now()) @map("date_creation_dossier") @db.Timestamptz(6)
+  statutDossier                 String                          @default("A_QUALIFIER") @map("statut_dossier") @db.VarChar(35)
+  priorite                      String                          @default("MOYENNE") @db.VarChar(20)
+  dateQualification             DateTime?                       @map("date_qualification") @db.Timestamptz(6)
+  idCommune                     String?                         @map("id_commune") @db.Uuid
+  latitude                      Decimal?                        @db.Decimal(10, 7)
+  longitude                     Decimal?                        @db.Decimal(10, 7)
+  precisionLocalisation         Decimal?                        @map("precision_localisation") @db.Decimal(8, 2)
+  descriptionLocalisation       String?                         @map("description_localisation") @db.Text
+  dateCloture                   DateTime?                       @map("date_cloture") @db.Timestamptz(6)
+  creePar                       String                          @map("cree_par") @db.Uuid
+  contenuDossier                ContenuDossier[]
+  utilisateur                   Utilisateur                     @relation(fields: [creePar], references: [idUtilisateur], onUpdate: NoAction)
+  commune                       Commune?                        @relation(fields: [idCommune], references: [idCommune], onDelete: Restrict, onUpdate: NoAction)
+  evenementMetier               EvenementMetier[]
+  historiqueLocalisationDossier HistoriqueLocalisationDossier[]
+  historiquePrioriteDossier     HistoriquePrioriteDossier[]
+  publicationFlux               PublicationFlux[]
+  rattachementSignalement       RattachementSignalement[]
+
+  @@index([statutDossier], map: "idx_dossier_statut")
+  @@map("dossier_traitement")
+}
+
+model DemandeComplement {
+  idDemande       String              @id @default(dbgenerated("gen_random_uuid()")) @map("id_demande") @db.Uuid
+  idSignalement   String              @map("id_signalement") @db.Uuid
+  demandePar      String              @map("demande_par") @db.Uuid
+  dateDemande     DateTime            @default(now()) @map("date_demande") @db.Timestamptz(6)
+  motif           String              @db.Text
+  etatDemande     String              @default("EN_ATTENTE") @map("etat_demande") @db.VarChar(20)
+  reponse         ReponseComplement?
+  signalement     Signalement         @relation(fields: [idSignalement], references: [idSignalement], onDelete: Restrict, onUpdate: NoAction)
+  utilisateur     Utilisateur         @relation("demande_complement_demandeur", fields: [demandePar], references: [idUtilisateur], onUpdate: NoAction)
+
+  @@index([idSignalement, dateDemande], map: "idx_demande_complement_signalement")
+  @@map("demande_complement")
+}
+
+model ReponseComplement {
+  idReponse       String           @id @default(dbgenerated("gen_random_uuid()")) @map("id_reponse") @db.Uuid
+  idDemande       String           @unique @map("id_demande") @db.Uuid
+  reponduPar      String           @map("repondu_par") @db.Uuid
+  dateReponse     DateTime         @default(now()) @map("date_reponse") @db.Timestamptz(6)
+  contenu         String           @db.Text
+  demande         DemandeComplement @relation(fields: [idDemande], references: [idDemande], onDelete: Restrict, onUpdate: NoAction)
+  utilisateur     Utilisateur      @relation("reponse_complement_auteur", fields: [reponduPar], references: [idUtilisateur], onUpdate: NoAction)
+
+  @@map("reponse_complement")
+}
+
+model Equipe {
+  idEquipe                      String                          @id @default(dbgenerated("gen_random_uuid()")) @map("id_equipe") @db.Uuid
+  nomEquipe                     String                          @map("nom_equipe") @db.VarChar(150)
+  description                   String?                         @db.Text
+  etatEquipe                    String                          @default("ACTIVE") @map("etat_equipe") @db.VarChar(20)
+  affectation                   Affectation[]
+  appartenanceEquipe            AppartenanceEquipe[]
+  competenceEquipe              CompetenceEquipe[]
+  delegationDecisionEquipe      DelegationDecisionEquipe[]
+  disponibiliteEquipe           DisponibiliteEquipe?
+  evenementMetier               EvenementMetier[]
+  historiqueDisponibiliteEquipe HistoriqueDisponibiliteEquipe[]
+
+  @@map("equipe")
+}
+
+model EvenementMetier {
+  idEvenement                                               String                   @id @default(dbgenerated("gen_random_uuid()")) @map("id_evenement") @db.Uuid
+  typeEvenement                                             String                   @map("type_evenement") @db.VarChar(50)
+  dateEvenement                                             DateTime?                @map("date_evenement") @db.Timestamptz(6)
+  dateEnregistrement                                        DateTime                 @default(now()) @map("date_enregistrement") @db.Timestamptz(6)
+  origine                                                   String                   @default("PORTAIL_GESTION") @db.VarChar(30)
+  idActeur                                                  String?                  @map("id_acteur") @db.Uuid
+  idSignalementCible                                        String?                  @map("id_signalement_cible") @db.Uuid
+  idDossierCible                                            String?                  @map("id_dossier_cible") @db.Uuid
+  idRattachementCible                                       String?                  @map("id_rattachement_cible") @db.Uuid
+  idAffectationCible                                        String?                  @map("id_affectation_cible") @db.Uuid
+  idInterventionCible                                       String?                  @map("id_intervention_cible") @db.Uuid
+  idVerificationCible                                       String?                  @map("id_verification_cible") @db.Uuid
+  idUtilisateurCible                                        String?                  @map("id_utilisateur_cible") @db.Uuid
+  idEquipeCible                                             String?                  @map("id_equipe_cible") @db.Uuid
+  idTypeDechetCible                                         String?                  @map("id_type_dechet_cible") @db.Uuid
+  idCompetenceEquipeCible                                   String?                  @map("id_competence_equipe_cible") @db.Uuid
+  idDossierContenuCible                                     String?                  @map("id_dossier_contenu_cible") @db.Uuid
+  idTypeDechetContenuCible                                  String?                  @map("id_type_dechet_contenu_cible") @db.Uuid
+  idEvenementCorrige                                        String?                  @map("id_evenement_corrige") @db.Uuid
+  donneesAvant                                              Json?                    @map("donnees_avant") @db.JsonB
+  donneesApres                                              Json?                    @map("donnees_apres") @db.JsonB
+  destinataireExterne                                       String?                  @map("destinataire_externe") @db.VarChar(255)
+  motif                                                     String?                  @db.Text
+  correlationId                                             String?                  @map("correlation_id") @db.VarChar(100)
+  referenceOperationUnique                                  String?                  @unique @map("reference_operation_unique") @db.VarChar(100)
+  versionSchema                                             String                   @default("2.13") @map("version_schema") @db.VarChar(10)
+  contenuDossier                                            ContenuDossier?          @relation(fields: [idDossierContenuCible, idTypeDechetContenuCible], references: [idDossier, idTypeDechet], onDelete: Restrict, onUpdate: NoAction, map: "fk_evenement_contenu_dossier")
+  evenementMetier                                           EvenementMetier?         @relation("evenement_metierToevenement_metier", fields: [idEvenementCorrige], references: [idEvenement], onDelete: Restrict, onUpdate: NoAction)
+  otherEvenementMetier                                      EvenementMetier[]        @relation("evenement_metierToevenement_metier")
+  competenceEquipe                                          CompetenceEquipe?        @relation(fields: [idCompetenceEquipeCible], references: [idCompetenceEquipe], onDelete: Restrict, onUpdate: NoAction)
+  typeDechet                                                TypeDechet?              @relation(fields: [idTypeDechetCible], references: [idTypeDechet], onDelete: Restrict, onUpdate: NoAction)
+  equipe                                                    Equipe?                  @relation(fields: [idEquipeCible], references: [idEquipe], onDelete: Restrict, onUpdate: NoAction)
+  utilisateurEvenementMetierIdUtilisateurCibleToutilisateur Utilisateur?             @relation("evenement_metier_id_utilisateur_cibleToutilisateur", fields: [idUtilisateurCible], references: [idUtilisateur], onDelete: Restrict, onUpdate: NoAction)
+  verificationResolution                                    VerificationResolution?  @relation(fields: [idVerificationCible], references: [idVerification], onDelete: Restrict, onUpdate: NoAction)
+  intervention                                              Intervention?            @relation(fields: [idInterventionCible], references: [idIntervention], onDelete: Restrict, onUpdate: NoAction)
+  affectation                                               Affectation?             @relation(fields: [idAffectationCible], references: [idAffectation], onDelete: Restrict, onUpdate: NoAction)
+  rattachementSignalement                                   RattachementSignalement? @relation(fields: [idRattachementCible], references: [idRattachement], onDelete: Restrict, onUpdate: NoAction)
+  dossierTraitement                                         DossierTraitement?       @relation(fields: [idDossierCible], references: [idDossier], onDelete: Restrict, onUpdate: NoAction)
+  signalement                                               Signalement?             @relation(fields: [idSignalementCible], references: [idSignalement], onDelete: Restrict, onUpdate: NoAction)
+  utilisateurEvenementMetierIdActeurToutilisateur           Utilisateur?             @relation("evenement_metier_id_acteurToutilisateur", fields: [idActeur], references: [idUtilisateur], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([typeEvenement], map: "idx_evenement_type")
+  @@index([idActeur], map: "idx_evenement_acteur")
+  @@index([dateEnregistrement], map: "idx_evenement_date")
+  @@map("evenement_metier")
+}
+
+model HistoriqueDisponibiliteEquipe {
+  idHistorique      String      @id @default(dbgenerated("gen_random_uuid()")) @map("id_historique") @db.Uuid
+  idEquipe          String      @map("id_equipe") @db.Uuid
+  etatDisponibilite String      @map("etat_disponibilite") @db.VarChar(20)
+  miseAJourPar      String      @map("mise_a_jour_par") @db.Uuid
+  dateMiseAJour     DateTime    @default(now()) @map("date_mise_a_jour") @db.Timestamptz(6)
+  valideJusqua      DateTime    @map("valide_jusqua") @db.Timestamptz(6)
+  commentaire       String?     @db.Text
+  utilisateur       Utilisateur @relation(fields: [miseAJourPar], references: [idUtilisateur], onUpdate: NoAction)
+  equipe            Equipe      @relation(fields: [idEquipe], references: [idEquipe], onUpdate: NoAction)
+
+  @@map("historique_disponibilite_equipe")
+}
+
+model HistoriqueLocalisationDossier {
+  idHistorique            String            @id @default(dbgenerated("gen_random_uuid()")) @map("id_historique") @db.Uuid
+  idDossier               String            @map("id_dossier") @db.Uuid
+  idCommune               String?           @map("id_commune") @db.Uuid
+  latitude                Decimal?          @db.Decimal(10, 7)
+  longitude               Decimal?          @db.Decimal(10, 7)
+  precisionLocalisation   Decimal?          @map("precision_localisation") @db.Decimal(8, 2)
+  descriptionLocalisation String?           @map("description_localisation") @db.Text
+  modifiePar              String            @map("modifie_par") @db.Uuid
+  dateModification        DateTime          @default(now()) @map("date_modification") @db.Timestamptz(6)
+  motif                   String?           @db.Text
+  utilisateur             Utilisateur       @relation(fields: [modifiePar], references: [idUtilisateur], onUpdate: NoAction)
+  commune                 Commune?          @relation(fields: [idCommune], references: [idCommune], onDelete: Restrict, onUpdate: NoAction)
+  dossierTraitement       DossierTraitement @relation(fields: [idDossier], references: [idDossier], onUpdate: NoAction)
+
+  @@map("historique_localisation_dossier")
+}
+
+model HistoriquePoints {
+  idPoint               String             @id @default(dbgenerated("gen_random_uuid()")) @map("id_point") @db.Uuid
+  idUtilisateur         String             @map("id_utilisateur") @db.Uuid
+  idSignalement         String?            @map("id_signalement") @db.Uuid
+  points                Int                @db.Integer
+  dateAttribution       DateTime           @default(now()) @map("date_attribution") @db.Timestamptz(6)
+  motif                 String             @db.VarChar(255)
+  typeMouvement         String             @map("type_mouvement") @db.VarChar(20)
+  idPointOrigine        String?            @map("id_point_origine") @db.Uuid
+  historiquePoints      HistoriquePoints?  @relation("historique_pointsTohistorique_points", fields: [idPointOrigine], references: [idPoint], onDelete: Restrict, onUpdate: NoAction)
+  otherHistoriquePoints HistoriquePoints[] @relation("historique_pointsTohistorique_points")
+  signalement           Signalement?       @relation(fields: [idSignalement], references: [idSignalement], onDelete: Restrict, onUpdate: NoAction)
+  utilisateur           Utilisateur        @relation(fields: [idUtilisateur], references: [idUtilisateur], onUpdate: NoAction)
+
+  @@index([idUtilisateur], map: "idx_points_user")
+  @@map("historique_points")
+}
+
+model HistoriquePrioriteDossier {
+  idHistorique      String            @id @default(dbgenerated("gen_random_uuid()")) @map("id_historique") @db.Uuid
+  idDossier         String            @map("id_dossier") @db.Uuid
+  priorite          String            @db.VarChar(20)
+  definiePar        String            @map("definie_par") @db.Uuid
+  dateDefinition    DateTime          @default(now()) @map("date_definition") @db.Timestamptz(6)
+  justification     String            @db.Text
+  utilisateur       Utilisateur       @relation(fields: [definiePar], references: [idUtilisateur], onUpdate: NoAction)
+  dossierTraitement DossierTraitement @relation(fields: [idDossier], references: [idDossier], onUpdate: NoAction)
+
+  @@map("historique_priorite_dossier")
+}
+
+model Intervention {
+  idIntervention            String              @id @default(dbgenerated("gen_random_uuid()")) @map("id_intervention") @db.Uuid
+  idAffectation             String              @map("id_affectation") @db.Uuid
+  dateHeureDebut            DateTime?           @map("date_heure_debut") @db.Timestamptz(6)
+  dateHeureFin              DateTime?           @map("date_heure_fin") @db.Timestamptz(6)
+  dateSoumissionCompteRendu DateTime?           @map("date_soumission_compte_rendu") @db.Timestamptz(6)
+  statutIntervention        String              @default("PROGRAMMEE") @map("statut_intervention") @db.VarChar(25)
+  resultatIntervention      String?             @map("resultat_intervention") @db.VarChar(25)
+  compteRendu               String?             @map("compte_rendu") @db.Text
+  motifException            String?             @map("motif_exception") @db.Text
+  renseignePar              String              @map("renseigne_par") @db.Uuid
+  evenementMetier           EvenementMetier[]
+  utilisateur               Utilisateur         @relation(fields: [renseignePar], references: [idUtilisateur], onUpdate: NoAction)
+  affectation               Affectation         @relation(fields: [idAffectation], references: [idAffectation], onUpdate: NoAction)
+  photoIntervention         PhotoIntervention[]
+
+  @@map("intervention")
+}
+
+model Notification {
+  idNotification String      @id @default(dbgenerated("gen_random_uuid()")) @map("id_notification") @db.Uuid
+  idUtilisateur  String      @map("id_utilisateur") @db.Uuid
+  titre          String      @db.VarChar(150)
+  message        String      @db.Text
+  lu             Boolean     @default(false) @db.Boolean
+  dateCreation   DateTime    @default(now()) @map("date_creation") @db.Timestamptz(6)
+  lienCible      String?     @map("lien_cible") @db.VarChar(255)
+  utilisateur    Utilisateur @relation(fields: [idUtilisateur], references: [idUtilisateur], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([idUtilisateur], map: "idx_notification_user")
+  @@map("notification")
+}
+
+model PhotoIntervention {
+  idPhotoIntervention    String             @id @default(dbgenerated("gen_random_uuid()")) @map("id_photo_intervention") @db.Uuid
+  idIntervention         String             @map("id_intervention") @db.Uuid
+  referencePhoto         String             @map("reference_photo") @db.VarChar(255)
+  contextePhoto          String             @default("FIN_INTERVENTION") @map("contexte_photo") @db.VarChar(30)
+  description            String?            @db.Text
+  dateAjout              DateTime           @default(now()) @map("date_ajout") @db.Timestamptz(6)
+  dateExpiration         DateTime           @default(dbgenerated("(CURRENT_TIMESTAMP + '1 year'::interval)")) @map("date_expiration") @db.Timestamptz(6)
+  mediaPurgeAt           DateTime?          @map("media_purge_at") @db.Timestamptz(6)
+  mediaStockeeLocale     Boolean            @default(false) @map("media_stockee_locale") @db.Boolean
+  etatPublication        String             @default("INTERNE") @map("etat_publication") @db.VarChar(20)
+  referencePhotoPublique String?            @map("reference_photo_publique") @db.VarChar(255)
+  floutageConfirme       Boolean            @default(false) @map("floutage_confirme") @db.Boolean
+  varianteSoumisePar    String?             @map("variante_soumise_par") @db.Uuid
+  dateSoumissionVariante DateTime?           @map("date_soumission_variante") @db.Timestamptz(6)
+  approuvePar            String?            @map("approuve_par") @db.Uuid
+  dateApprobation        DateTime?          @map("date_approbation") @db.Timestamptz(6)
+  utilisateurVarianteSoumisePar Utilisateur? @relation("photo_intervention_variante_soumise_par", fields: [varianteSoumisePar], references: [idUtilisateur], onDelete: Restrict, onUpdate: NoAction)
+  utilisateur            Utilisateur?       @relation(fields: [approuvePar], references: [idUtilisateur], onDelete: Restrict, onUpdate: NoAction)
+  intervention           Intervention       @relation(fields: [idIntervention], references: [idIntervention], onDelete: Cascade, onUpdate: NoAction)
+  photoPublication       PhotoPublication[]
+
+  @@map("photo_intervention")
+  @@index([etatPublication, dateSoumissionVariante], map: "idx_photo_intervention_publication_queue")
+  @@index([dateExpiration], map: "idx_photo_intervention_expiration")
+}
+
+model PhotoPublication {
+  idPhotoPublication  String             @id @default(dbgenerated("gen_random_uuid()")) @map("id_photo_publication") @db.Uuid
+  idPublication       String             @map("id_publication") @db.Uuid
+  idPhotoSignalement  String?            @map("id_photo_signalement") @db.Uuid
+  idPhotoIntervention String?            @map("id_photo_intervention") @db.Uuid
+  rolePhoto           String             @map("role_photo") @db.VarChar(15)
+  dateAjout           DateTime           @default(now()) @map("date_ajout") @db.Timestamptz(6)
+  photoIntervention   PhotoIntervention? @relation(fields: [idPhotoIntervention], references: [idPhotoIntervention], onDelete: Restrict, onUpdate: NoAction)
+  photoSignalement    PhotoSignalement?  @relation(fields: [idPhotoSignalement], references: [idPhotoSignalement], onDelete: Restrict, onUpdate: NoAction)
+  publicationFlux     PublicationFlux    @relation(fields: [idPublication], references: [idPublication], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([idPublication, idPhotoIntervention], map: "uq_photo_publication_intervention")
+  @@unique([idPublication, idPhotoSignalement], map: "uq_photo_publication_signalement")
+  @@map("photo_publication")
+}
+
+model PhotoSignalement {
+  idPhotoSignalement     String             @id @default(dbgenerated("gen_random_uuid()")) @map("id_photo_signalement") @db.Uuid
+  idSignalement          String             @map("id_signalement") @db.Uuid
+  referencePhoto         String             @map("reference_photo") @db.VarChar(255)
+  description            String?            @db.Text
+  dateAjout              DateTime           @default(now()) @map("date_ajout") @db.Timestamptz(6)
+  dateExpiration         DateTime           @default(dbgenerated("(CURRENT_TIMESTAMP + '1 year'::interval)")) @map("date_expiration") @db.Timestamptz(6)
+  mediaPurgeAt           DateTime?          @map("media_purge_at") @db.Timestamptz(6)
+  mediaStockeeLocale     Boolean            @default(false) @map("media_stockee_locale") @db.Boolean
+  etatPublication        String             @default("INTERNE") @map("etat_publication") @db.VarChar(20)
+  referencePhotoPublique String?            @map("reference_photo_publique") @db.VarChar(255)
+  floutageConfirme       Boolean            @default(false) @map("floutage_confirme") @db.Boolean
+  varianteSoumisePar    String?             @map("variante_soumise_par") @db.Uuid
+  dateSoumissionVariante DateTime?           @map("date_soumission_variante") @db.Timestamptz(6)
+  approuvePar            String?            @map("approuve_par") @db.Uuid
+  dateApprobation        DateTime?          @map("date_approbation") @db.Timestamptz(6)
+  utilisateurVarianteSoumisePar Utilisateur? @relation("photo_signalement_variante_soumise_par", fields: [varianteSoumisePar], references: [idUtilisateur], onDelete: Restrict, onUpdate: NoAction)
+  photoPublication       PhotoPublication[]
+  utilisateur            Utilisateur?       @relation(fields: [approuvePar], references: [idUtilisateur], onDelete: Restrict, onUpdate: NoAction)
+  signalement            Signalement        @relation(fields: [idSignalement], references: [idSignalement], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("photo_signalement")
+  @@index([etatPublication, dateSoumissionVariante], map: "idx_photo_signalement_publication_queue")
+  @@index([dateExpiration], map: "idx_photo_signalement_expiration")
+}
+
+model PreferencesVisibiliteCitoyen {
+  idUtilisateur        String       @id @map("id_utilisateur") @db.Uuid
+  afficherAvatar       Boolean      @default(false) @map("afficher_avatar") @db.Boolean
+  afficherNomPublic    Boolean      @default(false) @map("afficher_nom_public") @db.Boolean
+  nomPublic            String?      @map("nom_public") @db.VarChar(100)
+  afficherPoints       Boolean      @default(false) @map("afficher_points") @db.Boolean
+  afficherRang         Boolean      @default(false) @map("afficher_rang") @db.Boolean
+  afficherBadges       Boolean      @default(false) @map("afficher_badges") @db.Boolean
+  participerClassement Boolean      @default(false) @map("participer_classement") @db.Boolean
+  utilisateur          Utilisateur? @relation(fields: [idUtilisateur], references: [idUtilisateur], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("preferences_visibilite_citoyen")
+}
+
+model ProvenanceContenuDossier {
+  idDossier                String                   @map("id_dossier") @db.Uuid
+  idTypeDechet             String                   @map("id_type_dechet") @db.Uuid
+  idSignalement            String                   @map("id_signalement") @db.Uuid
+  idRattachement           String                   @map("id_rattachement") @db.Uuid
+  idQualification          String                   @map("id_qualification") @db.Uuid
+  ajoutePar                String                   @map("ajoute_par") @db.Uuid
+  dateDebut                DateTime                 @default(now()) @map("date_debut") @db.Timestamptz(6)
+  dateFin                  DateTime?                @map("date_fin") @db.Timestamptz(6)
+  motif                    String?                  @db.Text
+  rattachementSignalement  RattachementSignalement  @relation(fields: [idRattachement, idDossier, idSignalement], references: [idRattachement, idDossier, idSignalement], onUpdate: NoAction, map: "fk_provenance_rattachement_source")
+  qualificationSignalement QualificationSignalement @relation(fields: [idQualification, idSignalement, idTypeDechet], references: [idQualification, idSignalement, idTypeDechet], onUpdate: NoAction, map: "fk_provenance_qualification_source")
+  contenuDossier           ContenuDossier           @relation(fields: [idDossier, idTypeDechet], references: [idDossier, idTypeDechet], onUpdate: NoAction, map: "fk_provenance_contenu_dossier")
+  utilisateur              Utilisateur              @relation(fields: [ajoutePar], references: [idUtilisateur], onUpdate: NoAction)
+
+  @@id([idDossier, idTypeDechet, idQualification, dateDebut])
+  @@map("provenance_contenu_dossier")
+}
+
+model PublicationFlux {
+  idPublication                                      String             @id @default(dbgenerated("gen_random_uuid()")) @map("id_publication") @db.Uuid
+  idSignalement                                      String?            @map("id_signalement") @db.Uuid
+  idDossier                                          String?            @map("id_dossier") @db.Uuid
+  creePar                                            String             @map("cree_par") @db.Uuid
+  dateCreation                                       DateTime           @default(now()) @map("date_creation") @db.Timestamptz(6)
+  etatPublication                                    String             @default("EN_ATTENTE") @map("etat_publication") @db.VarChar(20)
+  approuvePar                                        String?            @map("approuve_par") @db.Uuid
+  dateApprobation                                    DateTime?          @map("date_approbation") @db.Timestamptz(6)
+  datePublication                                    DateTime?          @map("date_publication") @db.Timestamptz(6)
+  motifDecision                                      String?            @map("motif_decision") @db.Text
+  photoPublication                                   PhotoPublication[]
+  utilisateurPublicationFluxApprouveParToutilisateur Utilisateur?       @relation("publication_flux_approuve_parToutilisateur", fields: [approuvePar], references: [idUtilisateur], onDelete: Restrict, onUpdate: NoAction)
+  utilisateurPublicationFluxCreeParToutilisateur     Utilisateur        @relation("publication_flux_cree_parToutilisateur", fields: [creePar], references: [idUtilisateur], onUpdate: NoAction)
+  dossierTraitement                                  DossierTraitement? @relation(fields: [idDossier], references: [idDossier], onDelete: Restrict, onUpdate: NoAction)
+  signalement                                        Signalement?       @relation(fields: [idSignalement], references: [idSignalement], onDelete: Restrict, onUpdate: NoAction)
+
+  @@map("publication_flux")
+}
+
+model QualificationSignalement {
+  idQualification          String                     @id @default(dbgenerated("gen_random_uuid()")) @map("id_qualification") @db.Uuid
+  idSignalement            String                     @map("id_signalement") @db.Uuid
+  idTypeDechet             String                     @map("id_type_dechet") @db.Uuid
+  quantiteEstimee          Decimal?                   @map("quantite_estimee") @db.Decimal(12, 3)
+  uniteQuantite            String?                    @map("unite_quantite") @db.VarChar(30)
+  quantiteEstimeeLegacy    String?                    @map("quantite_estimee_legacy") @db.VarChar(50)
+  volumeEstime             String?                    @map("volume_estime") @db.VarChar(50)
+  remarque                 String?                    @db.Text
+  qualifiePar              String                     @map("qualifie_par") @db.Uuid
+  dateQualification        DateTime                   @default(now()) @map("date_qualification") @db.Timestamptz(6)
+  etatQualification        String                     @default("ACTIVE") @map("etat_qualification") @db.VarChar(20)
+  motifRetrait             String?                    @map("motif_retrait") @db.Text
+  provenanceContenuDossier ProvenanceContenuDossier[]
+  utilisateur              Utilisateur                @relation(fields: [qualifiePar], references: [idUtilisateur], onUpdate: NoAction)
+  typeDechet               TypeDechet                 @relation(fields: [idTypeDechet], references: [idTypeDechet], onUpdate: NoAction)
+  signalement              Signalement                @relation(fields: [idSignalement], references: [idSignalement], onUpdate: NoAction)
+
+  @@unique([idQualification, idSignalement, idTypeDechet], map: "uq_qualification_source")
+  @@map("qualification_signalement")
+}
+
+model RattachementSignalement {
+  idRattachement           String                     @id @default(dbgenerated("gen_random_uuid()")) @map("id_rattachement") @db.Uuid
+  idSignalement            String                     @map("id_signalement") @db.Uuid
+  idDossier                String                     @map("id_dossier") @db.Uuid
+  dateDebutRattachement    DateTime                   @default(now()) @map("date_debut_rattachement") @db.Timestamptz(6)
+  dateFinRattachement      DateTime?                  @map("date_fin_rattachement") @db.Timestamptz(6)
+  typeRattachement         String                     @default("PRINCIPAL") @map("type_rattachement") @db.VarChar(30)
+  motif                    String?                    @db.Text
+  idActeur                 String                     @map("id_acteur") @db.Uuid
+  evenementMetier          EvenementMetier[]
+  provenanceContenuDossier ProvenanceContenuDossier[]
+  utilisateur              Utilisateur                @relation(fields: [idActeur], references: [idUtilisateur], onUpdate: NoAction)
+  dossierTraitement        DossierTraitement          @relation(fields: [idDossier], references: [idDossier], onUpdate: NoAction)
+  signalement              Signalement                @relation(fields: [idSignalement], references: [idSignalement], onUpdate: NoAction)
+
+  @@unique([idRattachement, idDossier, idSignalement], map: "uq_rattachement_provenance")
+  @@map("rattachement_signalement")
+}
+
+model Region {
+  idRegion    String        @id @default(dbgenerated("gen_random_uuid()")) @map("id_region") @db.Uuid
+  codeRegion  String?       @unique @map("code_region") @db.VarChar(30)
+  nomRegion   String        @unique @map("nom_region") @db.VarChar(120)
+  actif       Boolean       @default(true) @db.Boolean
+  departement Departement[]
+
+  @@map("region")
+}
+
+model Role {
+  idRole          String            @id @default(dbgenerated("gen_random_uuid()")) @map("id_role") @db.Uuid
+  codeRole        String            @unique @map("code_role") @db.VarChar(50)
+  libelleRole     String            @map("libelle_role") @db.VarChar(100)
+  description     String?           @db.Text
+  utilisateurRole UtilisateurRole[]
+
+  @@map("role")
+}
+
+model Session {
+  idSession      String      @id @default(dbgenerated("gen_random_uuid()")) @map("id_session") @db.Uuid
+  idUtilisateur  String      @map("id_utilisateur") @db.Uuid
+  /// SHA-256 hash of the opaque session token; never store the bearer token itself.
+  token          String      @unique @db.VarChar(64)
+  clientType     String      @map("client_type") @db.VarChar(20)
+  dateCreation   DateTime    @default(now()) @map("date_creation") @db.Timestamptz(6)
+  dateExpiration DateTime    @map("date_expiration") @db.Timestamptz(6)
+  estActif       Boolean     @default(true) @map("est_actif") @db.Boolean
+  ipAddress      String?     @map("ip_address") @db.VarChar(50)
+  userAgent      String?     @map("user_agent") @db.Text
+  utilisateur    Utilisateur @relation(fields: [idUtilisateur], references: [idUtilisateur], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([idUtilisateur], map: "idx_session_user")
+  @@index([token], map: "idx_session_token")
+  @@map("session")
+}
+
+model Signalement {
+  idSignalement                                    String                     @id @default(dbgenerated("gen_random_uuid()")) @map("id_signalement") @db.Uuid
+  idUtilisateur                                    String                     @map("id_utilisateur") @db.Uuid
+  dateConstat                                      DateTime?                  @map("date_constat") @db.Timestamptz(6)
+  dateSoumission                                   DateTime?                  @map("date_soumission") @db.Timestamptz(6)
+  description                                      String?                    @db.Text
+  idCommune                                        String?                    @map("id_commune") @db.Uuid
+  latitude                                         Decimal?                   @db.Decimal(10, 7)
+  longitude                                        Decimal?                   @db.Decimal(10, 7)
+  precisionLocalisation                            Decimal?                   @map("precision_localisation") @db.Decimal(8, 2)
+  descriptionLocalisation                          String?                    @map("description_localisation") @db.Text
+  statutSignalement                                String                     @default("BROUILLON") @map("statut_signalement") @db.VarChar(35)
+  decisionPar                                      String?                    @map("decision_par") @db.Uuid
+  dateDecision                                     DateTime?                  @map("date_decision") @db.Timestamptz(6)
+  motifDecision                                    String?                    @map("motif_decision") @db.Text
+  evenementMetier                                  EvenementMetier[]
+  historiquePoints                                 HistoriquePoints[]
+  idempotenceCreation                              IdempotenceSignalement?
+  contenuSignalement                               ContenuSignalement[]
+  photoSignalement                                 PhotoSignalement[]
+  publicationFlux                                  PublicationFlux[]
+  demandeComplement                                DemandeComplement[]
+  qualificationSignalement                         QualificationSignalement[]
+  rattachementSignalement                          RattachementSignalement[]
+  utilisateurSignalementDecisionParToutilisateur   Utilisateur?               @relation("signalement_decision_parToutilisateur", fields: [decisionPar], references: [idUtilisateur], onUpdate: NoAction)
+  commune                                          Commune?                   @relation(fields: [idCommune], references: [idCommune], onDelete: Restrict, onUpdate: NoAction)
+  utilisateurSignalementIdUtilisateurToutilisateur Utilisateur                @relation("signalement_id_utilisateurToutilisateur", fields: [idUtilisateur], references: [idUtilisateur], onUpdate: NoAction)
+
+  @@index([statutSignalement], map: "idx_signalement_statut")
+  @@index([idUtilisateur], map: "idx_signalement_user")
+  @@map("signalement")
+}
+
+model IdempotenceSignalement {
+  idUtilisateur    String      @map("id_utilisateur") @db.Uuid
+  cleIdempotence   String      @map("cle_idempotence") @db.VarChar(100)
+  empreinteRequete String      @map("empreinte_requete") @db.Char(64)
+  idSignalement    String      @unique @map("id_signalement") @db.Uuid
+  dateCreation     DateTime    @default(now()) @map("date_creation") @db.Timestamptz(6)
+  signalement      Signalement @relation(fields: [idSignalement], references: [idSignalement], onDelete: Cascade, onUpdate: NoAction, map: "fk_idempotence_signalement_signalement")
+  utilisateur      Utilisateur @relation(fields: [idUtilisateur], references: [idUtilisateur], onDelete: Cascade, onUpdate: NoAction, map: "fk_idempotence_signalement_utilisateur")
+
+  @@id([idUtilisateur, cleIdempotence], map: "pk_idempotence_signalement")
+  @@index([dateCreation], map: "idx_idempotence_signalement_date")
+  @@map("idempotence_signalement")
+}
+
+model TypeDechet {
+  idTypeDechet             String                     @id @default(dbgenerated("gen_random_uuid()")) @map("id_type_dechet") @db.Uuid
+  codeType                 String                     @unique @map("code_type") @db.VarChar(50)
+  libelle                  String                     @db.VarChar(100)
+  description              String?                    @db.Text
+  orientationSpecialisee   Boolean                    @default(false) @map("orientation_specialisee") @db.Boolean
+  dateDebutValidite        DateTime                   @default(now()) @map("date_debut_validite") @db.Timestamptz(6)
+  dateFinValidite          DateTime?                  @map("date_fin_validite") @db.Timestamptz(6)
+  competenceEquipe         CompetenceEquipe[]
+  contenuSignalement       ContenuSignalement[]
+  contenuDossier           ContenuDossier[]
+  evenementMetier          EvenementMetier[]
+  qualificationSignalement QualificationSignalement[]
+
+  @@map("type_dechet")
+}
+
+model ContenuSignalement {
+  idSignalement   String      @map("id_signalement") @db.Uuid
+  idTypeDechet    String      @map("id_type_dechet") @db.Uuid
+  quantiteEstimee String?     @map("quantite_estimee") @db.VarChar(50)
+  volumeEstime    String?     @map("volume_estime") @db.VarChar(50)
+  remarque        String?     @db.Text
+  signalement     Signalement @relation(fields: [idSignalement], references: [idSignalement], onDelete: Cascade, onUpdate: NoAction)
+  typeDechet      TypeDechet  @relation(fields: [idTypeDechet], references: [idTypeDechet], onDelete: Restrict, onUpdate: NoAction)
+
+  @@id([idSignalement, idTypeDechet], map: "pk_contenu_signalement")
+  @@map("contenu_signalement")
+}
+
+model Utilisateur {
+  idUtilisateur                                                 String                          @id @default(dbgenerated("gen_random_uuid()")) @map("id_utilisateur") @db.Uuid
+  nom                                                           String                          @db.VarChar(100)
+  prenom                                                        String?                         @db.VarChar(100)
+  referenceAvatar                                               String?                         @map("reference_avatar") @db.VarChar(255)
+  email                                                         String                          @unique @db.VarChar(255)
+  telephone                                                     String?                         @db.VarChar(50)
+  motDePasseHash                                                String                          @map("mot_de_passe_hash") @db.VarChar(255)
+  dateInscription                                               DateTime                        @default(now()) @map("date_inscription") @db.Timestamptz(6)
+  etatCompte                                                    String                          @default("ACTIF") @map("etat_compte") @db.VarChar(20)
+  affectationAffectationReponduParToutilisateur                 Affectation[]                   @relation("affectation_repondu_parToutilisateur")
+  affectationAffectationIdDecideurToutilisateur                 Affectation[]                   @relation("affectation_id_decideurToutilisateur")
+  appartenanceEquipe                                            AppartenanceEquipe[]
+  badgeUtilisateurBadgeUtilisateurAttribueParToutilisateur      BadgeUtilisateur[]              @relation("badge_utilisateur_attribue_parToutilisateur")
+  badgeUtilisateurBadgeUtilisateurIdUtilisateurToutilisateur    BadgeUtilisateur[]              @relation("badge_utilisateur_id_utilisateurToutilisateur")
+  competenceEquipe                                              CompetenceEquipe[]
+  contenuDossierContenuDossierRetireParToutilisateur            ContenuDossier[]                @relation("contenu_dossier_retire_parToutilisateur")
+  contenuDossierContenuDossierQualifieParToutilisateur          ContenuDossier[]                @relation("contenu_dossier_qualifie_parToutilisateur")
+  delegationDecisionEquipe                                      DelegationDecisionEquipe[]
+  disponibiliteEquipe                                           DisponibiliteEquipe[]
+  dossierTraitement                                             DossierTraitement[]
+  evenementMetierEvenementMetierIdUtilisateurCibleToutilisateur EvenementMetier[]               @relation("evenement_metier_id_utilisateur_cibleToutilisateur")
+  evenementMetierEvenementMetierIdActeurToutilisateur           EvenementMetier[]               @relation("evenement_metier_id_acteurToutilisateur")
+  historiqueDisponibiliteEquipe                                 HistoriqueDisponibiliteEquipe[]
+  demandesComplementDemandees                                    DemandeComplement[]             @relation("demande_complement_demandeur")
+  reponsesComplement                                             ReponseComplement[]             @relation("reponse_complement_auteur")
+  historiqueLocalisationDossier                                 HistoriqueLocalisationDossier[]
+  historiquePoints                                              HistoriquePoints[]
+  idempotenceSignalement                                        IdempotenceSignalement[]
+  historiquePrioriteDossier                                     HistoriquePrioriteDossier[]
+  intervention                                                  Intervention[]
+  notification                                                  Notification[]
+  photoIntervention                                             PhotoIntervention[]
+  photoInterventionVarianteSoumisePar                          PhotoIntervention[]            @relation("photo_intervention_variante_soumise_par")
+  photoSignalement                                              PhotoSignalement[]
+  photoSignalementVarianteSoumisePar                           PhotoSignalement[]              @relation("photo_signalement_variante_soumise_par")
+  preferencesVisibiliteCitoyen                                  PreferencesVisibiliteCitoyen?
+  provenanceContenuDossier                                      ProvenanceContenuDossier[]
+  publicationFluxPublicationFluxApprouveParToutilisateur        PublicationFlux[]               @relation("publication_flux_approuve_parToutilisateur")
+  publicationFluxPublicationFluxCreeParToutilisateur            PublicationFlux[]               @relation("publication_flux_cree_parToutilisateur")
+  qualificationSignalement                                      QualificationSignalement[]
+  rattachementSignalement                                       RattachementSignalement[]
+  session                                                       Session[]
+  signalementSignalementDecisionParToutilisateur                Signalement[]                   @relation("signalement_decision_parToutilisateur")
+  signalementSignalementIdUtilisateurToutilisateur              Signalement[]                   @relation("signalement_id_utilisateurToutilisateur")
+  utilisateurRoleUtilisateurRoleAttribueParToutilisateur        UtilisateurRole[]               @relation("utilisateur_role_attribue_parToutilisateur")
+  utilisateurRoleUtilisateurRoleIdUtilisateurToutilisateur      UtilisateurRole[]               @relation("utilisateur_role_id_utilisateurToutilisateur")
+  verificationResolution                                        VerificationResolution[]
+
+  @@map("utilisateur")
+}
+
+model UtilisateurRole {
+  idUtilisateur                                        String       @map("id_utilisateur") @db.Uuid
+  idRole                                               String       @map("id_role") @db.Uuid
+  dateDebut                                            DateTime     @default(now()) @map("date_debut") @db.Timestamptz(6)
+  dateFin                                              DateTime?    @map("date_fin") @db.Timestamptz(6)
+  attribuePar                                          String?      @map("attribue_par") @db.Uuid
+  motif                                                String?      @db.Text
+  utilisateurUtilisateurRoleAttribueParToutilisateur   Utilisateur? @relation("utilisateur_role_attribue_parToutilisateur", fields: [attribuePar], references: [idUtilisateur], onUpdate: NoAction)
+  role                                                 Role         @relation(fields: [idRole], references: [idRole], onUpdate: NoAction)
+  utilisateurUtilisateurRoleIdUtilisateurToutilisateur Utilisateur  @relation("utilisateur_role_id_utilisateurToutilisateur", fields: [idUtilisateur], references: [idUtilisateur], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([idUtilisateur, idRole, dateDebut], map: "pk_utilisateur_role")
+  @@map("utilisateur_role")
+}
+
+model VerificationResolution {
+  idVerification       String            @id @default(dbgenerated("gen_random_uuid()")) @map("id_verification") @db.Uuid
+  idAffectation        String            @map("id_affectation") @db.Uuid
+  idVerificateur       String            @map("id_verificateur") @db.Uuid
+  dateVerification     DateTime          @default(now()) @map("date_verification") @db.Timestamptz(6)
+  resultatVerification String            @map("resultat_verification") @db.VarChar(30)
+  etatVerification     String            @default("COURANTE") @map("etat_verification") @db.VarChar(20)
+  motif                String?           @db.Text
+  referencePreuve      String?           @map("reference_preuve") @db.VarChar(255)
+  evenementMetier      EvenementMetier[]
+  utilisateur          Utilisateur       @relation(fields: [idVerificateur], references: [idUtilisateur], onUpdate: NoAction)
+  affectation          Affectation       @relation(fields: [idAffectation], references: [idAffectation], onUpdate: NoAction)
+
+  @@map("verification_resolution")
+}

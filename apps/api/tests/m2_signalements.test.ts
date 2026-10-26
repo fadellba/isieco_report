@@ -1,7 +1,15 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { FastifyInstance } from 'fastify';
-import { createTestApp, cleanDatabase, loginAs, TEST_PERSONAS, TEST_TYPES_DECHETS } from './helpers.js';
+import {
+  createTestApp,
+  cleanDatabase,
+  failTableWriteForTest,
+  loginAs,
+  TEST_PERSONAS,
+  TEST_TYPES_DECHETS,
+} from './helpers.js';
 import { StatutSignalement } from '@isieco/shared';
+import { getDb } from '../src/db/index.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -83,6 +91,53 @@ describe('Jalon M2 (Tranche 1) — Soumission Citoyenne, GPS & Isolation IDOR', 
     expect(list.count).toBe(1);
     expect(list.data[0].idSignalement).toBe(body.idSignalement);
     expect(Number(list.data[0].latitude)).toBeCloseTo(14.6728, 4);
+  });
+
+  it('annule signalement, événement et idempotence si la dernière écriture échoue', async () => {
+    const citoyen = await loginAs(app, TEST_PERSONAS.CITOYEN.email);
+    const idempotencyKey = `f06-rollback-${Date.now()}`;
+    const removeFailure = await failTableWriteForTest('notification');
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/signalements',
+        headers: {
+          ...citoyen.headers,
+          'idempotency-key': idempotencyKey,
+        },
+        payload: {
+          description: 'Signalement annulé par une panne injectée en fin de transaction.',
+          latitude: 14.6728,
+          longitude: -17.4325,
+          categories: [{ idTypeDechet: TEST_TYPES_DECHETS.PLASTIQUE }],
+        },
+      });
+      expect(response.statusCode).toBe(500);
+    } finally {
+      await removeFailure();
+    }
+
+    const persisted = await getDb().queryOne<{
+      reports: string;
+      events: string;
+      idempotency_records: string;
+    }>(
+      `SELECT
+         (SELECT count(*)::text FROM signalement
+          WHERE id_utilisateur = $1
+            AND description = 'Signalement annulé par une panne injectée en fin de transaction.'
+         ) AS reports,
+         (SELECT count(*)::text FROM evenement_metier
+          WHERE id_acteur = $1 AND type_evenement = 'SIGNALEMENT_RECU') AS events,
+         (SELECT count(*)::text FROM idempotence_signalement
+          WHERE id_utilisateur = $1 AND cle_idempotence = $2) AS idempotency_records`,
+      [TEST_PERSONAS.CITOYEN.id, idempotencyKey],
+    );
+    expect(persisted).toEqual({
+      reports: '0',
+      events: '0',
+      idempotency_records: '0',
+    });
   });
 
   // --------------------------------------------------------------------------

@@ -24,17 +24,21 @@ export const AffectationsPage: React.FC = () => {
   const [motif, setMotif] = useState('');
   const [observation, setObservation] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const fetchData = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const [voletsRes, compRes] = await Promise.all([
         api.get<ApiListResponse<AffectationEnAttente>>('/affectations/en-attente'),
         api.get<ApiListResponse<CompetenceEquipeItem>>('/referentiels/competences'),
       ]);
       setVoletsEnAttente(voletsRes.data || []);
       setCompetences(compRes.data || []);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Impossible de charger les données d’affectation.');
     } finally {
       setLoading(false);
     }
@@ -95,9 +99,9 @@ export const AffectationsPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="ops-workflow-page p-6 space-y-6">
       {/* Title */}
-      <div className="flex items-center justify-between">
+      <div className="ops-workflow-heading flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-isieco-dark flex items-center gap-2">
             <GitFork className="h-6 w-6 text-isieco-primary" />
@@ -117,6 +121,33 @@ export const AffectationsPage: React.FC = () => {
         </button>
       </div>
 
+      <div className="ops-workflow-metrics" aria-label="Aperçu des affectations">
+        <article className="ops-workflow-metric">
+          <span>Volets à affecter</span>
+          <strong>{loading ? '—' : voletsEnAttente.length}</strong>
+          <small>En attente d’une équipe</small>
+        </article>
+        <article className="ops-workflow-metric">
+          <span>Équipes correspondantes</span>
+          <strong>{selectedVolet ? availableCompetences.length : '—'}</strong>
+          <small>{selectedVolet ? selectedVolet.libelleDechet : 'Sélectionnez un volet'}</small>
+        </article>
+        <article className="ops-workflow-metric">
+          <span>Compétences actives</span>
+          <strong>{loading ? '—' : competences.length}</strong>
+          <small>Référentiel des équipes</small>
+        </article>
+      </div>
+
+      {loadError && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700" role="alert">
+          <span>Erreur de chargement : {loadError}</span>
+          <button type="button" onClick={() => void fetchData()} className="font-semibold underline">
+            Réessayer
+          </button>
+        </div>
+      )}
+
       {feedback && (
         <div
           className={`flex items-center gap-2 rounded-xl p-4 text-xs border ${
@@ -135,10 +166,10 @@ export const AffectationsPage: React.FC = () => {
       )}
 
       {/* Workspace */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[600px]">
+      <div className="ops-workflow-grid grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[600px]">
         
         {/* Left Column : Volets en attente (6 cols) */}
-        <div className="lg:col-span-6 rounded-xl border border-isieco-border bg-white shadow-sm flex flex-col">
+        <div className="ops-workflow-panel lg:col-span-6 rounded-xl border border-isieco-border bg-white shadow-sm flex flex-col">
           <div className="border-b border-isieco-border p-3.5 bg-gray-50/70 flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-isieco-dark">
               Volets en attente d affectation ({voletsEnAttente.length})
@@ -148,7 +179,11 @@ export const AffectationsPage: React.FC = () => {
           <div className="divide-y divide-isieco-border overflow-y-auto max-h-[650px] flex-1">
             {voletsEnAttente.length === 0 ? (
               <div className="p-8 text-center text-xs text-isieco-muted">
-                Aucun volet technique en attente d affectation. Tous les dossiers sont pourvus.
+                {loading
+                  ? 'Chargement des volets en attente…'
+                  : loadError
+                    ? 'Les volets n’ont pas pu être chargés.'
+                  : 'Aucun volet technique en attente d affectation. Tous les dossiers sont pourvus.'}
               </div>
             ) : (
               voletsEnAttente.map((v) => {
@@ -202,9 +237,9 @@ export const AffectationsPage: React.FC = () => {
         </div>
 
         {/* Right Column : Formulaire d affectation contrôlée (6 cols) */}
-        <div className="lg:col-span-6">
+        <div className="ops-workflow-detail lg:col-span-6">
           {selectedVolet ? (
-            <div className="rounded-xl border border-isieco-border bg-white p-6 shadow-sm space-y-5">
+            <div className="ops-workflow-panel rounded-xl border border-isieco-border bg-white p-6 shadow-sm space-y-5">
               <div className="border-b border-isieco-border pb-4">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-isieco-primary">
                   Attribution de mission
@@ -308,9 +343,13 @@ export const AffectationsPage: React.FC = () => {
               </form>
             </div>
           ) : (
-            <div className="rounded-xl border border-dashed border-isieco-border p-12 text-center text-xs text-isieco-muted bg-white flex flex-col items-center justify-center min-h-[400px]">
+            <div className="ops-workflow-panel rounded-xl border border-dashed border-isieco-border p-12 text-center text-xs text-isieco-muted bg-white flex flex-col items-center justify-center min-h-[400px]">
               <GitFork className="h-8 w-8 text-gray-300 mb-2" />
-              Sélectionnez un volet en attente dans la liste de gauche pour affecter une équipe compétente.
+              {loading
+                ? 'Chargement des volets et des équipes…'
+                : loadError
+                  ? 'Les informations d’affectation ne sont pas disponibles.'
+                : 'Sélectionnez un volet en attente dans la liste de gauche pour affecter une équipe compétente.'}
             </div>
           )}
         </div>

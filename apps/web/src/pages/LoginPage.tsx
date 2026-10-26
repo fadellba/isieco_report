@@ -12,6 +12,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import './login.css';
+import { ThemePreferenceControl } from '../components/layout/ThemePreferenceControl.js';
 
 const DEMO_PERSONAS = [
   {
@@ -100,7 +101,10 @@ export const LoginPage: React.FC = () => {
         <section className="login-panel" aria-labelledby="login-title">
           <div className="login-panel__top">
             <span className="login-secure"><LockKeyhole size={13} /> ACCÈS SÉCURISÉ</span>
-            <span className="login-panel__location">DAKAR, SÉNÉGAL</span>
+            <div className="login-panel__top-actions">
+              <span className="login-panel__location">DAKAR, SÉNÉGAL</span>
+              <ThemePreferenceControl compact />
+            </div>
           </div>
 
           <div className="login-panel__content">

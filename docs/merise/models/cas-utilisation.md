@@ -57,7 +57,7 @@ L'affectation se fait ensuite **une catégorie à la fois**. Si trois catégorie
 
 ### UC05 — Créer et qualifier un dossier
 **Acteur :** responsable de traitement.  
-**Scénario :** confirme qu’un cas est à traiter, qualifie l’emplacement et le contenu, conserve une seule ligne `CONTENU_DOSSIER` par catégorie retenue, puis définit un niveau de priorité.  
+**Scénario :** confirme qu’un cas est à traiter, qualifie l’emplacement et le contenu, conserve une seule ligne `CONTENU_DOSSIER` par catégorie retenue, puis définit un niveau de priorité. Les responsables habilités peuvent ensuite corriger priorité et localisation avec justification ; chaque valeur initiale ou nouvelle est historisée et journalisée.
 **Exception :** cas hors périmètre ou nécessitant une prise en charge spécialisée ; le dossier est transféré ou mis en attente selon la procédure définie.
 
 ### UC06 — Affecter une équipe à une catégorie
@@ -94,8 +94,9 @@ L'affectation se fait ensuite **une catégorie à la fois**. Si trois catégorie
 **Acteur :** administrateur des comptes.  
 **Scénario :** active, désactive ou attribue des rôles selon la politique d’accès. L’action est attribuée et journalisée. Elle ne confère pas automatiquement une responsabilité opérationnelle.
 
-### Extension future — Points citoyens (hors périmètre initial)
-La gestion des points citoyens n’est pas un cas d’utilisation du prototype initial. Si elle est réintroduite ultérieurement, elle devra faire l’objet d’un cas d’utilisation distinct, d’un barème approuvé et de règles anti-abus.
+### UC14 — Consulter les points citoyens
+**Acteur :** citoyen déclarant.
+**Scénario :** consulte le solde et l’historique des attributions et compensations. Une attribution de 10 points est créée une seule fois à l’acceptation d’un signalement ; un doublon confirmé ou une correction motivée de l’acceptation avant rattachement crée une compensation traçable. Le solde n’influence ni la réception ni le traitement du signalement. Les attributions administratives libres ne sont pas disponibles.
 
 ## 4. Parcours global proposé
 

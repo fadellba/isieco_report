@@ -1,4 +1,5 @@
 import pg from 'pg';
+import { config } from '../config.js';
 import { IDbAdapter } from './adapter.js';
 
 const { Pool } = pg;
@@ -12,13 +13,8 @@ export class PostgresDbAdapter implements IDbAdapter {
     } else if (connectionStringOrConfig) {
       this.pool = new Pool(connectionStringOrConfig);
     } else {
-      // Paramètres par défaut pour DBngin local
       this.pool = new Pool({
-        host: process.env.DB_HOST || '127.0.0.1',
-        port: Number(process.env.DB_PORT) || 5432,
-        user: process.env.DB_USER || 'postgres',
-        password: process.env.DB_PASSWORD || '',
-        database: process.env.DB_NAME || 'isieco_dev',
+        connectionString: config.databaseUrl,
         max: 20,
         idleTimeoutMillis: 30000,
         connectionTimeoutMillis: 5000,
@@ -82,4 +78,3 @@ export class PostgresDbAdapter implements IDbAdapter {
     await this.pool.end();
   }
 }
-

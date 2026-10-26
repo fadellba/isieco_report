@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,12 @@ import {
 } from 'react-native';
 import { mobileApi } from '../../services/api.js';
 import { NotificationItem } from '../../types/index.js';
+import { useTheme } from '../../context/ThemeContext.js';
+import type { DesignTokens } from '@isieco/shared';
 
 export const NotificationsScreen: React.FC = () => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [notifs, setNotifs] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -55,7 +59,7 @@ export const NotificationsScreen: React.FC = () => {
       </View>
 
       {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} size="large" color="#16a34a" />
+        <ActivityIndicator style={{ marginTop: 40 }} size="large" color={colors.primary} />
       ) : (
         <FlatList
           data={notifs}
@@ -67,7 +71,7 @@ export const NotificationsScreen: React.FC = () => {
                 setRefreshing(true);
                 fetchNotifs();
               }}
-              colors={['#16a34a']}
+              colors={[colors.primary]}
             />
           }
           contentContainerStyle={styles.list}
@@ -105,10 +109,10 @@ export const NotificationsScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: DesignTokens) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
     padding: 16,
   },
   headerRow: {
@@ -120,16 +124,16 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0f172a',
+    color: colors.textPrimary,
   },
   unreadBadge: {
-    backgroundColor: '#dbeafe',
+    backgroundColor: colors.infoSurface,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 12,
   },
   unreadText: {
-    color: '#1d4ed8',
+    color: colors.info,
     fontSize: 10,
     fontWeight: '700',
   },
@@ -137,15 +141,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   notifCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.border,
   },
   notifCardUnread: {
-    borderColor: '#93c5fd',
-    backgroundColor: '#f0fdf4',
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySubtle,
   },
   notifHeader: {
     flexDirection: 'row',
@@ -155,20 +159,20 @@ const styles = StyleSheet.create({
   },
   notifTitle: {
     fontSize: 13,
-    color: '#334155',
+    color: colors.textSecondary,
     flex: 1,
   },
   notifTitleBold: {
     fontWeight: '800',
-    color: '#0f172a',
+    color: colors.textPrimary,
   },
   notifDate: {
     fontSize: 10,
-    color: '#94a3b8',
+    color: colors.textSecondary,
   },
   notifMessage: {
     fontSize: 12,
-    color: '#475569',
+    color: colors.textSecondary,
     lineHeight: 16,
   },
   empty: {
@@ -177,6 +181,6 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: colors.textSecondary,
   },
 });

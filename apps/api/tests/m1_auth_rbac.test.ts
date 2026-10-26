@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { createHash } from 'node:crypto';
 import { FastifyInstance } from 'fastify';
 import { createTestApp, cleanDatabase, loginAs, TEST_PERSONAS } from './helpers.js';
 import { ClientType, RoleCode } from '@isieco/shared';
+import { getDb } from '../src/db/index.js';
 
 describe('Jalon M1 (Tranche 0) — Auth Dual-Client & RBAC Guard', () => {
   let app: FastifyInstance;
@@ -34,6 +36,14 @@ describe('Jalon M1 (Tranche 0) — Auth Dual-Client & RBAC Guard', () => {
     const loginWeb = await loginAs(app, TEST_PERSONAS.CITOYEN.email, TEST_PERSONAS.CITOYEN.password, ClientType.WEB);
     expect(loginWeb.statusCode).toBe(200);
     expect(loginWeb.cookies['session_token']).toBeDefined();
+    expect(loginWeb.body.token).toBeUndefined();
+    const storedSessions = await getDb().query<{ token: string }>(
+      'SELECT token FROM session WHERE id_utilisateur = $1',
+      [TEST_PERSONAS.CITOYEN.id],
+    );
+    expect(storedSessions.map(({ token }) => token)).toContain(
+      createHash('sha256').update(loginWeb.cookies['session_token'], 'utf8').digest('hex'),
+    );
 
     // 3. Rejet si mot de passe erroné (401)
     const badPassword = await loginAs(app, TEST_PERSONAS.CITOYEN.email, 'WrongPassword123');
@@ -47,7 +57,7 @@ describe('Jalon M1 (Tranche 0) — Auth Dual-Client & RBAC Guard', () => {
     // 5. Rejet si compte inactif / suspendu (401)
     const inactiveLogin = await loginAs(app, TEST_PERSONAS.INACTIF.email, TEST_PERSONAS.INACTIF.password);
     expect(inactiveLogin.statusCode).toBe(401);
-    expect(inactiveLogin.body.error.message).toMatch(/inactif/i);
+    expect(inactiveLogin.body.error.message).toBe('Identifiants de connexion invalides.');
   });
 
   // --------------------------------------------------------------------------
@@ -57,7 +67,7 @@ describe('Jalon M1 (Tranche 0) — Auth Dual-Client & RBAC Guard', () => {
     // Citoyen authentifié
     const citoyen = await loginAs(app, TEST_PERSONAS.CITOYEN.email);
 
-    // Tentative 1 : Citoyen essayant d'accéder à la boîte de réception de qualification (Réservé QUALIF / TRAITEMENT / ADMIN)
+    // Tentative 1 : Citoyen essayant d'accéder à la boîte de réception de qualification
     const resQualif = await app.inject({
       method: 'GET',
       url: '/api/qualification/boite-reception',
@@ -94,6 +104,18 @@ describe('Jalon M1 (Tranche 0) — Auth Dual-Client & RBAC Guard', () => {
     expect(resAffectation.statusCode).toBe(403);
 
     const admin = await loginAs(app, TEST_PERSONAS.ADMIN.email);
+    for (const url of [
+      '/api/qualification/boite-reception',
+      '/api/affectations/en-attente',
+    ]) {
+      const adminRead = await app.inject({
+        method: 'GET',
+        url,
+        headers: admin.headers,
+      });
+      expect(adminRead.statusCode).toBe(403);
+    }
+
     const adminDossier = await app.inject({
       method: 'POST',
       url: '/api/dossiers',

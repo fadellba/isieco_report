@@ -89,7 +89,7 @@ Le schéma relationnel logique complet figure dans `models/mld.md`. Il décrit l
 - enregistrement cohérent du changement métier et de son événement ;
 - exclusion des fonctionnalités de récompense du flux opérationnel initial.
 
-Le MLD reste logique. Le choix d’un stockage, d’un format de pièce jointe ou d’un mécanisme physique de journal doit être documenté séparément et ne peut annuler silencieusement les contraintes métier. Le scénario initial ne modélise pas un référentiel `ZONE` : les coordonnées servent à la localisation sur carte, pas au calcul automatique d’une compétence territoriale. Les points citoyens sont hors du modèle initial.
+Le MLD reste logique. Le choix d’un stockage, d’un format de pièce jointe ou d’un mécanisme physique de journal doit être documenté séparément et ne peut annuler silencieusement les contraintes métier. Le scénario initial ne modélise pas un référentiel `ZONE` : les coordonnées servent à la localisation sur carte, pas au calcul automatique d’une compétence territoriale. Les points citoyens sont conservés dans un registre de mouvements selon DC-29.
 
 ## 3.5 Protection des données et gouvernance
 

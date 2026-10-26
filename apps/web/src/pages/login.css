@@ -543,3 +543,87 @@
     display: none;
   }
 }
+
+.login-panel__top-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.login-brand::after {
+  position: absolute;
+  bottom: -7px;
+  left: 49px;
+  width: 28px;
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #00853F 0 33%, #FDEF42 33% 66%, #E31B23 66%);
+  content: "";
+}
+
+:root[data-theme="light"] .login-screen {
+  background:
+    radial-gradient(ellipse at 10% 10%, #dff0e4, transparent 36%),
+    radial-gradient(ellipse at 95% 90%, #e5f2e9, transparent 32%),
+    var(--color-background);
+}
+
+:root[data-theme="light"] .login-shell,
+:root[data-theme="light"] .login-panel {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+}
+
+:root[data-theme="light"] .login-panel__content h2 {
+  color: var(--color-text-primary);
+}
+
+:root[data-theme="light"] .login-secure,
+:root[data-theme="light"] .login-panel__location,
+:root[data-theme="light"] .login-panel__intro,
+:root[data-theme="light"] .login-divider {
+  color: var(--color-text-secondary);
+}
+
+:root[data-theme="light"] .login-kicker--green {
+  color: var(--color-primary);
+}
+
+:root[data-theme="light"] .login-form > label {
+  color: var(--color-text-primary);
+}
+
+:root[data-theme="light"] .login-form input {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+:root[data-theme="light"] .login-error {
+  border-color: #E7B9B4;
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
+}
+
+:root[data-theme="light"] .login-demo-card {
+  border-color: var(--color-border);
+  background: #f7faf7;
+}
+
+:root[data-theme="light"] .login-demo-card:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-subtle);
+}
+
+:root[data-theme="light"] .login-demo-card__text strong {
+  color: var(--color-text-primary);
+}
+
+:root[data-theme="light"] .login-demo-card__text small,
+:root[data-theme="light"] .login-demo-card__role {
+  color: var(--color-text-secondary);
+}
+
+:root[data-theme="light"] .login-panel__footer {
+  color: var(--color-text-secondary);
+}

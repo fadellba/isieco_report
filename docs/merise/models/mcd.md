@@ -1,7 +1,7 @@
 ---
 title: Modèle Conceptuel de Données (MCD)
 project: ISI-Eco Report
-version: 2.10
+version: 2.11
 methodology: Merise
 status: Modèle conceptuel stabilisé pour le scénario académique — validation opérationnelle non réalisée
 ---
@@ -33,7 +33,7 @@ Un citoyen transmet **un seul `SIGNALEMENT`** et déclare, par exemple, trois ca
 
 Si les trois catégories sont incluses, le responsable d’affectation crée trois `AFFECTATION` : chacune associe le même dossier à une catégorie précise et à une équipe compétente. Les équipes peuvent être différentes ; si une seule équipe est compétente pour deux catégories, deux affectations distinctes sont tout de même créées. Les interventions et vérifications sont indépendantes pour chaque affectation. Une catégorie déjà présente dans le dossier n’est pas dupliquée lorsqu’un autre signalement est rattaché au même dossier.
 
-Le statut global du dossier est calculé à partir des catégories encore incluses. Le dossier ne peut pas être déclaré entièrement résolu tant qu’une de ces catégories n’a pas obtenu une vérification positive, sauf clôture exceptionnelle autorisée et motivée.
+Le statut global du dossier est recalculé depuis les états des catégories encore incluses : affectation à faire, traitement actif, puis vérification attendue, dans cet ordre de priorité. L’absence de catégorie incluse donne `A_QUALIFIER`. Même lorsque toutes les catégories sont `TERMINEE`, le dossier reste en attente de vérification jusqu’à la commande explicite de clôture.
 
 ## 2. Entités conceptuelles
 
@@ -57,7 +57,8 @@ Le statut global du dossier est calculé à partir des catégories encore inclus
 - **CONTENU_SIGNALEMENT** : association entre un signalement et une catégorie déclarée, avec estimations ou remarques facultatives.
 - **DOSSIER_TRAITEMENT** : cas opérationnel, localisation qualifiée, priorité et état courant.
 - **RATTACHEMENT_SIGNALEMENT** : lien historisé entre un signalement et un dossier. Il permet de corriger un rapprochement sans effacer le lien précédent.
-- **CONTENU_DOSSIER** : catégorie de déchets qualifiée dans un dossier, avec estimation, risque et état de prise en charge (`INCLUSE` ou `RETIRE`). Une ligne est conservée par couple dossier/catégorie, même si cette catégorie est retirée ultérieurement du périmètre de traitement ; la raison et la date de retrait sont tracées.
+- **CONTENU_DOSSIER** : catégorie de déchets qualifiée dans un dossier, avec estimation, risque, état de prise en charge (`INCLUSE` ou `RETIRE`) et provenance d’ajout. L’origine distingue les catégories venues d’un signalement, celles initiales à la création, les ajouts manuels et l’historique non déterminable. Un ajout manuel exige un motif ; une ligne est conservée par couple dossier/catégorie et un retrait conserve sa raison, sa date et son acteur.
+- **QUALIFICATION_SIGNALEMENT** et **PROVENANCE_CONTENU_DOSSIER** : historique des catégories qualifiées par signalement et de leur contribution au contenu d’un dossier, relié au rattachement et à la qualification source.
 
 ### Traitement et vérification
 
@@ -65,6 +66,15 @@ Le statut global du dossier est calculé à partir des catégories encore inclus
 - **INTERVENTION** : visite ou action réalisée pour une affectation. Une affectation peut entraîner plusieurs interventions.
 - **PHOTO_INTERVENTION** : preuve visuelle facultative associée à une intervention et à son contexte.
 - **VERIFICATION_RESOLUTION** : contrôle historisé du résultat d'une affectation. Plusieurs vérifications peuvent exister pour la même affectation ; `etatVerification` distingue la décision courante, une décision remplacée ou une décision annulée, avec au plus une décision courante par affectation.
+- **DEMANDE_COMPLEMENT** et **REPONSE_COMPLEMENT** : demande d’information complémentaire et réponse append-only du déclarant.
+- **DISPONIBILITE_EQUIPE** et **HISTORIQUE_DISPONIBILITE_EQUIPE** : état informatif courant de l’équipe et traces de ses mises à jour ; la disponibilité ne remplace pas les compétences.
+- **HISTORIQUE_PRIORITE_DOSSIER** et **HISTORIQUE_LOCALISATION_DOSSIER** : valeurs antérieures et décisions motivées de priorité/localisation.
+- **DELEGATION_DECISION_EQUIPE** : délégation bornée par l’appartenance d’équipe, le type de décision et une période.
+- **IDEMPOTENCE_SIGNALEMENT** : empreinte d’une requête de création associée à une clé par utilisateur, sans stocker le contenu secret d’authentification.
+- **PUBLICATION_FLUX** et **PHOTO_PUBLICATION** : publication modérée distincte des photos sources ; l’accès public passe par des variantes approuvées et expirables.
+- **PREFERENCES_VISIBILITE_CITOYEN**, **BADGE**, **BADGE_UTILISATEUR** et **HISTORIQUE_POINTS** : préférences explicites de visibilité, badges et registre immuable des mouvements de points.
+- **NOTIFICATION** et **SESSION** : notifications applicatives et sessions dont le jeton est conservé sous forme d’empreinte, et non en clair.
+- **REGION**, **DEPARTEMENT** et **COMMUNE** : référentiel géographique hiérarchisé ; la commune est optionnelle sur le signalement et le dossier.
 
 ### Historique transversal
 

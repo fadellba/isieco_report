@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text } from 'react-native';
+import { useTheme } from '../context/ThemeContext.js';
 
 import { NouveauSignalementScreen } from '../screens/citoyen/NouveauSignalementScreen.js';
 import { MesSignalementsScreen } from '../screens/citoyen/MesSignalementsScreen.js';
@@ -11,14 +12,22 @@ import { ProfileScreen } from '../screens/common/ProfileScreen.js';
 const Tab = createBottomTabNavigator();
 
 export const CitoyenNavigator: React.FC = () => {
+  const { colors } = useTheme();
   return (
     <Tab.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: '#ffffff' },
-        headerTitleStyle: { fontWeight: '800', color: '#0f172a' },
-        tabBarActiveTintColor: '#16a34a',
-        tabBarInactiveTintColor: '#64748b',
-        tabBarStyle: { height: 60, paddingBottom: 8, paddingTop: 6 },
+        headerStyle: { backgroundColor: colors.surface },
+        headerTitleStyle: { fontWeight: '800', color: colors.textPrimary },
+        headerTintColor: colors.primary,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarStyle: {
+          height: 62,
+          paddingBottom: 8,
+          paddingTop: 6,
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+        },
         tabBarLabelStyle: { fontSize: 10, fontWeight: '700' },
       }}
     >

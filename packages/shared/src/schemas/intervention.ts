@@ -21,6 +21,17 @@ export const FinishInterventionSchema = z.object({
   resultatIntervention: z.nativeEnum(ResultatIntervention),
   compteRendu: z.string().min(10, 'Le compte-rendu doit comporter au moins 10 caractères (RG37)'),
   motifException: z.string().nullable().optional(),
+}).superRefine((input, context) => {
+  if (
+    input.resultatIntervention !== ResultatIntervention.SUCCES_TOTAL &&
+    (!input.motifException || input.motifException.trim().length < 10)
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['motifException'],
+      message: 'Un motif d’au moins 10 caractères est obligatoire pour un résultat autre que le succès total.',
+    });
+  }
 });
 
 export type FinishInterventionInput = z.infer<typeof FinishInterventionSchema>;

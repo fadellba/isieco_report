@@ -2,6 +2,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Text } from 'react-native';
+import { useTheme } from '../context/ThemeContext.js';
 
 import { MissionsTerrainScreen } from '../screens/terrain/MissionsTerrainScreen.js';
 import { CompteRenduScreen } from '../screens/terrain/CompteRenduScreen.js';
@@ -12,11 +13,13 @@ const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 const MissionsStack: React.FC = () => {
+  const { colors } = useTheme();
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: '#ffffff' },
-        headerTitleStyle: { fontWeight: '800', color: '#0f172a' },
+        headerStyle: { backgroundColor: colors.surface },
+        headerTitleStyle: { fontWeight: '800', color: colors.textPrimary },
+        headerTintColor: colors.primary,
       }}
     >
       <Stack.Screen
@@ -34,14 +37,22 @@ const MissionsStack: React.FC = () => {
 };
 
 export const TerrainNavigator: React.FC = () => {
+  const { colors } = useTheme();
   return (
     <Tab.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: '#ffffff' },
-        headerTitleStyle: { fontWeight: '800', color: '#0f172a' },
-        tabBarActiveTintColor: '#2563eb',
-        tabBarInactiveTintColor: '#64748b',
-        tabBarStyle: { height: 60, paddingBottom: 8, paddingTop: 6 },
+        headerStyle: { backgroundColor: colors.surface },
+        headerTitleStyle: { fontWeight: '800', color: colors.textPrimary },
+        headerTintColor: colors.primary,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarStyle: {
+          height: 62,
+          paddingBottom: 8,
+          paddingTop: 6,
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+        },
         tabBarLabelStyle: { fontSize: 10, fontWeight: '700' },
       }}
     >

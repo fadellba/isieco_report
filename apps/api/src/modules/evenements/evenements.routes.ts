@@ -1,10 +1,39 @@
 import { FastifyPluginAsync } from 'fastify';
-import { getDb } from '../../db/index.js';
 import { RoleCode } from '@isieco/shared';
 import { BadRequestError, NotFoundError } from '../../core/errors.js';
-import crypto from 'node:crypto';
+import { EvenementRuleError } from '../../domain/evenements.js';
+import {
+  correctAuditEvent,
+  createAuditEvent,
+  listAuditEvents,
+} from '../../application/use-cases/evenements.js';
+import type { EventTargets } from '../../application/ports/evenements-repository.js';
+
+function rethrowEvenementError(error: unknown): never {
+  if (!(error instanceof EvenementRuleError)) {
+    throw error;
+  }
+
+  switch (error.rule) {
+    case 'INVALID_CORRECTION_REASON':
+      throw new BadRequestError("Un motif de rectification explicite d'au moins 10 caractères est obligatoire.");
+    case 'ORIGINAL_EVENT_NOT_FOUND':
+      throw new NotFoundError('Événement original introuvable.');
+    case 'EVENT_TYPE_REQUIRED':
+      throw new BadRequestError("Le type d'événement est obligatoire.");
+    case 'INCOMPLETE_COMPOSITE_TARGET':
+      throw new BadRequestError("Cible composite incomplète : idDossierContenuCible et idTypeDechetContenuCible doivent être fournis ensemble (Test T33).");
+    case 'NO_EVENT_TARGET':
+      throw new BadRequestError("L'événement métier doit avoir exactement une cible principale (Test T17 / T32).");
+    case 'MULTIPLE_EVENT_TARGETS':
+      throw new BadRequestError("L'événement métier ne peut pas cibler simultanément plusieurs entités (Test T17 / T32).");
+    case 'COMPOSITE_TARGET_NOT_FOUND':
+      throw new BadRequestError("La cible composite pointe vers un couple dossier/catégorie inexistant (Test T34).");
+  }
+}
 
 export const evenementsRoutes: FastifyPluginAsync = async (fastify) => {
+  const repository = fastify.dependencies.evenements;
   const allowedAuditors = [
     RoleCode.QUALIFICATION,
     RoleCode.TRAITEMENT,
@@ -13,6 +42,61 @@ export const evenementsRoutes: FastifyPluginAsync = async (fastify) => {
     RoleCode.ADMIN,
     RoleCode.DECISION,
   ];
+  const auditEventTypesByRole: Partial<Record<RoleCode, string[]>> = {
+    [RoleCode.QUALIFICATION]: [
+      'SIGNALEMENT_RECU',
+      'SIGNALEMENT_EN_QUALIFICATION',
+      'SIGNALEMENT_ACCEPTE',
+      'SIGNALEMENT_REJETE',
+      'SIGNALEMENT_ACCEPTATION_CORRIGEE',
+      'COMPLEMENT_DEMANDE',
+      'COMPLEMENT_REPONSE',
+    ],
+    [RoleCode.TRAITEMENT]: [
+      'DOSSIER_CREE',
+      'DOSSIER_QUALIFIE',
+      'SIGNALEMENT_RATTACHE',
+      'SIGNALEMENT_DERATTACHE',
+      'VOLET_AJOUTE',
+      'VOLET_RETIRE',
+      'DOSSIER_PRIORITE_MODIFIEE',
+      'DOSSIER_LOCALISATION_MODIFIEE',
+      'TRANSFERT_EXTERNE',
+      'DOSSIER_REOUVERT',
+    ],
+    [RoleCode.AFFECTATION]: [
+      'DOSSIER_CREE',
+      'DOSSIER_QUALIFIE',
+      'SIGNALEMENT_RATTACHE',
+      'SIGNALEMENT_DERATTACHE',
+      'VOLET_AJOUTE',
+      'VOLET_RETIRE',
+      'DOSSIER_PRIORITE_MODIFIEE',
+      'DOSSIER_LOCALISATION_MODIFIEE',
+      'AFFECTATION_CREEE',
+      'AFFECTATION_REMPLACEE',
+      'AFFECTATION_ANNULEE',
+      'DOSSIER_REOUVERT',
+    ],
+    [RoleCode.VERIFICATION]: [
+      'INTERVENTION_DEBUTEE',
+      'INTERVENTION_TERMINEE',
+      'VERIFICATION_ENREGISTREE',
+      'RESOLUTION_CONFIRMEE',
+      'DOSSIER_CLOS',
+      'DOSSIER_REOUVERT',
+    ],
+    [RoleCode.DECISION]: [
+      'PUBLICATION_REMISE_EN_MODERATION',
+      'PUBLICATION_APPROUVEE',
+      'PUBLICATION_REFUSEE',
+      'PUBLICATION_MASQUEE',
+      'VARIANTE_PHOTO_SOUMISE',
+      'VARIANTE_PHOTO_APPROUVEE',
+      'VARIANTE_PHOTO_REFUSEE',
+      'VARIANTE_PHOTO_RETIRE',
+    ],
+  };
 
   // Consultation du journal d'audit immuable (UC12 / Test T19)
   fastify.get('/audit-trail', {
@@ -72,65 +156,21 @@ export const evenementsRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
   }, async (req) => {
-    const query = req.query as {
+    const roles = req.user!.roles;
+    const allowedEventTypes = roles.includes(RoleCode.ADMIN)
+      ? undefined
+      : [...new Set(roles.flatMap((role) => auditEventTypesByRole[role] ?? []))];
+    const events = await listAuditEvents(repository, {
+      ...(req.query as {
       typeEvenement?: string;
       idActeur?: string;
       idDossierCible?: string;
       idSignalementCible?: string;
-      limit?: string;
-    };
-    const db = getDb();
-
-    let sql = `
-      SELECT em.id_evenement as "idEvenement",
-             em.type_evenement as "typeEvenement",
-             em.date_evenement as "dateEvenement",
-             em.date_enregistrement as "dateEnregistrement",
-             em.origine,
-             em.id_acteur as "idActeur",
-             u.nom as "nomActeur",
-             u.prenom as "prenomActeur",
-             em.id_signalement_cible as "idSignalementCible",
-             em.id_dossier_cible as "idDossierCible",
-             em.id_rattachement_cible as "idRattachementCible",
-             em.id_affectation_cible as "idAffectationCible",
-             em.id_intervention_cible as "idInterventionCible",
-             em.id_verification_cible as "idVerificationCible",
-             em.id_utilisateur_cible as "idUtilisateurCible",
-             em.id_evenement_corrige as "idEvenementCorrige",
-             em.donnees_avant as "donneesAvant",
-             em.donnees_apres as "donneesApres",
-             em.destinataire_externe as "destinataireExterne",
-             em.motif,
-             em.correlation_id as "correlationId"
-      FROM evenement_metier em
-      LEFT JOIN utilisateur u ON em.id_acteur = u.id_utilisateur
-      WHERE 1=1
-    `;
-    const params: any[] = [];
-
-    if (query.typeEvenement) {
-      sql += ` AND em.type_evenement = $${params.length + 1}`;
-      params.push(query.typeEvenement);
-    }
-    if (query.idActeur) {
-      sql += ` AND em.id_acteur = $${params.length + 1}`;
-      params.push(query.idActeur);
-    }
-    if (query.idDossierCible) {
-      sql += ` AND em.id_dossier_cible = $${params.length + 1}`;
-      params.push(query.idDossierCible);
-    }
-    if (query.idSignalementCible) {
-      sql += ` AND em.id_signalement_cible = $${params.length + 1}`;
-      params.push(query.idSignalementCible);
-    }
-
-    sql += ` ORDER BY em.date_enregistrement DESC LIMIT $${params.length + 1}`;
-    params.push(Number(query.limit) || 100);
-
-    const rows = await db.query(sql, params);
-    return { success: true, count: rows.length, data: rows };
+      limit?: string | number;
+      }),
+      allowedEventTypes,
+    });
+    return { success: true, count: events.length, data: events };
   });
 
   // Correction immuable d'un événement passé (Test T18)
@@ -171,77 +211,29 @@ export const evenementsRoutes: FastifyPluginAsync = async (fastify) => {
     },
   }, async (req, reply) => {
     const { id } = req.params as { id: string };
-    const { nouveauType, motif, donneesApres } = req.body as {
-      nouveauType: string;
+    const body = req.body as {
+      nouveauType?: string;
       motif: string;
-      donneesApres?: any;
+      donneesApres?: unknown;
     };
 
-    if (!motif || motif.trim().length < 10) {
-      throw new BadRequestError("Un motif de rectification explicite d'au moins 10 caractères est obligatoire.");
+    try {
+      const correction = await correctAuditEvent(repository, {
+        eventId: id,
+        actorId: req.user!.idUtilisateur,
+        newType: body.nouveauType,
+        reason: body.motif,
+        dataAfter: body.donneesApres,
+      });
+
+      return reply.status(201).send({
+        success: true,
+        ...correction,
+        message: "Correction enregistrée sans modification de l'événement historique (Test T18).",
+      });
+    } catch (error) {
+      rethrowEvenementError(error);
     }
-
-    const db = getDb();
-    const original = await db.queryOne<{
-      id_evenement: string;
-      id_signalement_cible: string | null;
-      id_dossier_cible: string | null;
-      id_rattachement_cible: string | null;
-      id_affectation_cible: string | null;
-      id_intervention_cible: string | null;
-      id_verification_cible: string | null;
-      id_utilisateur_cible: string | null;
-      id_equipe_cible: string | null;
-      id_type_dechet_cible: string | null;
-      id_competence_equipe_cible: string | null;
-      id_dossier_contenu_cible: string | null;
-      id_type_dechet_contenu_cible: string | null;
-    }>(
-      `SELECT * FROM evenement_metier WHERE id_evenement = $1`,
-      [id]
-    );
-
-    if (!original) throw new NotFoundError('Événement original introuvable.');
-
-    // Règle T18 : L'original reste INCHANGÉ. On crée un nouvel événement pointant vers idEvenementCorrige
-    const idNouvelEvenement = crypto.randomUUID();
-
-    await db.execute(
-      `INSERT INTO evenement_metier (
-         id_evenement, type_evenement, origine, id_acteur,
-         id_signalement_cible, id_dossier_cible, id_rattachement_cible, id_affectation_cible,
-         id_intervention_cible, id_verification_cible, id_utilisateur_cible, id_equipe_cible,
-         id_type_dechet_cible, id_competence_equipe_cible, id_dossier_contenu_cible, id_type_dechet_contenu_cible,
-         id_evenement_corrige, donnees_apres, motif
-       ) VALUES ($1, $2, 'PORTAIL_GESTION', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
-      [
-        idNouvelEvenement,
-        nouveauType || 'EVENEMENT_CORRIGE',
-        req.user!.idUtilisateur,
-        original.id_signalement_cible,
-        original.id_dossier_cible,
-        original.id_rattachement_cible,
-        original.id_affectation_cible,
-        original.id_intervention_cible,
-        original.id_verification_cible,
-        original.id_utilisateur_cible,
-        original.id_equipe_cible,
-        original.id_type_dechet_cible,
-        original.id_competence_equipe_cible,
-        original.id_dossier_contenu_cible,
-        original.id_type_dechet_contenu_cible,
-        id, // idEvenementCorrige
-        donneesApres ? JSON.stringify(donneesApres) : null,
-        `Correction tracée : ${motif.trim()}`,
-      ]
-    );
-
-    return reply.status(201).send({
-      success: true,
-      idEvenement: idNouvelEvenement,
-      idEvenementCorrige: id,
-      message: "Correction enregistrée sans modification de l'événement historique (Test T18).",
-    });
   });
 
   // Enregistrement direct d'un événement métier (Tests T17, T32, T33, T34)
@@ -285,104 +277,29 @@ export const evenementsRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
   }, async (req, reply) => {
-    const {
-      typeEvenement,
-      dateEvenement,
-      idSignalementCible,
-      idDossierCible,
-      idRattachementCible,
-      idAffectationCible,
-      idInterventionCible,
-      idVerificationCible,
-      idUtilisateurCible,
-      idEquipeCible,
-      idTypeDechetCible,
-      idCompetenceEquipeCible,
-      idDossierContenuCible,
-      idTypeDechetContenuCible,
-      motif,
-    } = req.body as any;
+    const body = req.body as {
+      typeEvenement?: string;
+      dateEvenement?: string;
+      motif?: string;
+    } & EventTargets;
+    const { typeEvenement, dateEvenement, motif, ...targets } = body;
 
-    if (!typeEvenement) {
-      throw new BadRequestError("Le type d'événement est obligatoire.");
-    }
-
-    // Validation T33 : Cible composite incomplète
-    const hasDossierContenu = idDossierContenuCible != null;
-    const hasDechetContenu = idTypeDechetContenuCible != null;
-    if (hasDossierContenu !== hasDechetContenu) {
-      throw new BadRequestError("Cible composite incomplète : idDossierContenuCible et idTypeDechetContenuCible doivent être fournis ensemble (Test T33).");
-    }
-
-    // Validation T17 & T32 : Exactement 1 groupe cible
-    const targetCount = [
-      idSignalementCible,
-      idDossierCible,
-      idRattachementCible,
-      idAffectationCible,
-      idInterventionCible,
-      idVerificationCible,
-      idUtilisateurCible,
-      idEquipeCible,
-      idTypeDechetCible,
-      idCompetenceEquipeCible,
-      hasDossierContenu && hasDechetContenu ? true : null,
-    ].filter(Boolean).length;
-
-    if (targetCount === 0) {
-      throw new BadRequestError("L'événement métier doit avoir exactement une cible principale (Test T17 / T32).");
-    }
-    if (targetCount > 1) {
-      throw new BadRequestError("L'événement métier ne peut pas cibler simultanément plusieurs entités (Test T17 / T32).");
-    }
-
-    const db = getDb();
-
-    // Validation T34 : Cible composite pointant vers un couple inexistant
-    if (hasDossierContenu && hasDechetContenu) {
-      const exists = await db.queryOne<{ id_dossier: string }>(
-        `SELECT id_dossier FROM contenu_dossier WHERE id_dossier = $1 AND id_type_dechet = $2`,
-        [idDossierContenuCible, idTypeDechetContenuCible]
-      );
-      if (!exists) {
-        throw new BadRequestError("La cible composite pointe vers un couple dossier/catégorie inexistant (Test T34).");
-      }
-    }
-
-    const idEvenement = crypto.randomUUID();
-    await db.execute(
-      `INSERT INTO evenement_metier (
-         id_evenement, type_evenement, date_evenement, origine, id_acteur,
-         id_signalement_cible, id_dossier_cible, id_rattachement_cible, id_affectation_cible,
-         id_intervention_cible, id_verification_cible, id_utilisateur_cible, id_equipe_cible,
-         id_type_dechet_cible, id_competence_equipe_cible, id_dossier_contenu_cible, id_type_dechet_contenu_cible,
-         motif
-       ) VALUES ($1, $2, $3, 'PORTAIL_GESTION', $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
-      [
-        idEvenement,
+    try {
+      const idEvenement = await createAuditEvent(repository, {
         typeEvenement,
-        dateEvenement ? new Date(dateEvenement).toISOString() : new Date().toISOString(),
-        req.user!.idUtilisateur,
-        idSignalementCible || null,
-        idDossierCible || null,
-        idRattachementCible || null,
-        idAffectationCible || null,
-        idInterventionCible || null,
-        idVerificationCible || null,
-        idUtilisateurCible || null,
-        idEquipeCible || null,
-        idTypeDechetCible || null,
-        idCompetenceEquipeCible || null,
-        idDossierContenuCible || null,
-        idTypeDechetContenuCible || null,
-        motif || null,
-      ]
-    );
+        dateEvenement,
+        actorId: req.user!.idUtilisateur,
+        targets,
+        motif,
+      });
 
-    return reply.status(201).send({
-      success: true,
-      idEvenement,
-      message: 'Événement métier créé avec succès.',
-    });
+      return reply.status(201).send({
+        success: true,
+        idEvenement,
+        message: 'Événement métier créé avec succès.',
+      });
+    } catch (error) {
+      rethrowEvenementError(error);
+    }
   });
 };

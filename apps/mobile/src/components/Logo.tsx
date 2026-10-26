@@ -4,9 +4,14 @@ import { View, Text, StyleSheet } from 'react-native';
 interface LogoProps {
   size?: 'small' | 'medium' | 'large';
   showSubtitle?: boolean;
+  tone?: 'light' | 'dark';
 }
 
-export const Logo: React.FC<LogoProps> = ({ size = 'medium', showSubtitle = true }) => {
+export const Logo: React.FC<LogoProps> = ({
+  size = 'medium',
+  showSubtitle = true,
+  tone = 'light',
+}) => {
   const getDimensions = () => {
     switch (size) {
       case 'small':
@@ -40,7 +45,6 @@ export const Logo: React.FC<LogoProps> = ({ size = 'medium', showSubtitle = true
 
   return (
     <View style={styles.container}>
-      {/* Icon Badge */}
       <View
         style={[
           styles.badge,
@@ -51,19 +55,22 @@ export const Logo: React.FC<LogoProps> = ({ size = 'medium', showSubtitle = true
           },
         ]}
       >
-        <Text style={{ fontSize: dim.iconSize }}>🌿</Text>
+        <View style={[styles.cube, { width: dim.iconSize + 8, height: dim.iconSize + 8 }]}>
+          <View style={[styles.cubeLayer, styles.cubeLayerBack, { width: dim.iconSize * 0.55, height: dim.iconSize * 0.55 }]} />
+          <View style={[styles.cubeLayer, styles.cubeLayerMiddle, { width: dim.iconSize * 0.55, height: dim.iconSize * 0.55 }]} />
+          <View style={[styles.cubeLayer, styles.cubeLayerFront, { width: dim.iconSize * 0.55, height: dim.iconSize * 0.55 }]} />
+        </View>
       </View>
 
-      {/* Typography */}
       <View style={styles.textContainer}>
         <View style={styles.brandRow}>
-          <Text style={[styles.titleISI, { fontSize: dim.titleSize }]}>ISI-Eco</Text>
-          <Text style={[styles.titleReport, { fontSize: dim.titleSize }]}>Report</Text>
+          <Text style={[styles.titleISI, tone === 'dark' && styles.titleISIDark, { fontSize: dim.titleSize }]}>ISI-Eco</Text>
+          <Text style={[styles.titleReport, tone === 'dark' && styles.titleReportDark, { fontSize: dim.titleSize }]}>Report</Text>
         </View>
 
         {showSubtitle && (
-          <View style={styles.taglineBox}>
-            <Text style={[styles.subtitle, { fontSize: dim.subSize }]}>
+          <View style={[styles.taglineBox, tone === 'dark' && styles.taglineBoxDark]}>
+            <Text style={[styles.subtitle, tone === 'dark' && styles.subtitleDark, { fontSize: dim.subSize }]}>
               DAKAR-PLATEAU & MÉDINA
             </Text>
           </View>
@@ -80,16 +87,37 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   badge: {
-    backgroundColor: '#16a34a',
+    backgroundColor: '#103d27',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#16a34a',
-    shadowOpacity: 0.35,
+    shadowColor: '#36c883',
+    shadowOpacity: 0.24,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 4,
     borderWidth: 2,
-    borderColor: '#bbf7d0',
+    borderColor: '#48c58b',
+  },
+  cube: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cubeLayer: {
+    position: 'absolute',
+    borderRadius: 2,
+    transform: [{ rotate: '45deg' }],
+  },
+  cubeLayerBack: {
+    backgroundColor: '#96e9b5',
+    transform: [{ rotate: '45deg' }, { translateY: -5 }],
+  },
+  cubeLayerMiddle: {
+    backgroundColor: '#48c58b',
+    transform: [{ rotate: '45deg' }],
+  },
+  cubeLayerFront: {
+    backgroundColor: '#16784e',
+    transform: [{ rotate: '45deg' }, { translateY: 5 }],
   },
   textContainer: {
     alignItems: 'center',
@@ -103,25 +131,37 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     letterSpacing: -0.5,
   },
+  titleISIDark: {
+    color: '#e5eee8',
+  },
   titleReport: {
     fontWeight: '900',
-    color: '#16a34a',
+    color: '#2b9c67',
     letterSpacing: -0.5,
     marginLeft: 4,
   },
+  titleReportDark: {
+    color: '#48c58b',
+  },
   taglineBox: {
-    backgroundColor: '#f0fdf4',
+    backgroundColor: '#e8f5ec',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#bbf7d0',
+    borderColor: '#b9e2c6',
     marginTop: 4,
+  },
+  taglineBoxDark: {
+    backgroundColor: '#14251a',
+    borderColor: '#294b37',
   },
   subtitle: {
     fontWeight: '800',
-    color: '#15803d',
+    color: '#17653f',
     letterSpacing: 0.8,
   },
+  subtitleDark: {
+    color: '#9eddb5',
+  },
 });
-

@@ -1,9 +1,9 @@
 ---
 title: Modèle Logique de Données (MLD)
 project: ISI-Eco Report
-version: 2.10
+version: 2.13
 methodology: Merise
-status: Modèle logique consolidé pour le scénario académique — hypothèses à signaler
+status: Inventaire relationnel aligné sur les 39 modèles Prisma — règles d’exploitation à valider
 ---
 
 # Modèle Logique de Données (MLD)
@@ -40,8 +40,10 @@ UTILISATEUR(
   idUtilisateur PK,
   nom NN,
   prenom NULL,
+  referenceAvatar NULL,
   email UQ NN,
   telephone NULL,
+  motDePasseHash NN,
   dateInscription NN,
   etatCompte NN
 )
@@ -61,7 +63,9 @@ TYPE_DECHET(
   codeType UQ NN,
   libelle NN,
   description NULL,
-  orientationSpecialisee BOOLEAN NN
+  orientationSpecialisee BOOLEAN NN,
+  dateDebutValidite NN,
+  dateFinValidite NULL
 )
 
 EQUIPE(
@@ -95,8 +99,9 @@ SIGNALEMENT(
   idSignalement PK,
   idUtilisateur FK NN -> UTILISATEUR,
   dateConstat NULL,
-  dateSoumission NN,
-  description NN,
+  dateSoumission NULL,
+  description NULL,
+  idCommune FK NULL -> COMMUNE,
   latitude NULL,
   longitude NULL,
   precisionLocalisation NULL,
@@ -112,7 +117,17 @@ PHOTO_SIGNALEMENT(
   referencePhoto NN,
   description NULL,
   dateAjout NN,
-  idSignalement FK NN -> SIGNALEMENT
+  idSignalement FK NN -> SIGNALEMENT,
+  dateExpiration NN,
+  mediaPurgeAt NULL,
+  mediaStockeeLocale BOOLEAN NN,
+  etatPublication NN,
+  referencePhotoPublique NULL,
+  floutageConfirme BOOLEAN NN,
+  varianteSoumisePar FK NULL -> UTILISATEUR,
+  dateSoumissionVariante NULL,
+  approuvePar FK NULL -> UTILISATEUR,
+  dateApprobation NULL
 )
 
 CONTENU_SIGNALEMENT(
@@ -131,6 +146,7 @@ DOSSIER_TRAITEMENT(
   statutDossier NN,
   priorite NN,
   dateQualification NULL,
+  idCommune FK NULL -> COMMUNE,
   latitude NULL,
   longitude NULL,
   precisionLocalisation NULL,
@@ -154,15 +170,22 @@ CONTENU_DOSSIER(
   idDossier PK/FK -> DOSSIER_TRAITEMENT,
   idTypeDechet PK/FK -> TYPE_DECHET,
   quantiteEstimee NULL,
+  uniteQuantite NULL,
+  quantiteEstimeeLegacy NULL,
   volumeEstime NULL,
   niveauRisqueQualifie NULL,
   remarque NULL,
   qualifiePar FK NULL -> UTILISATEUR,
   dateQualification NULL,
   etatContenuDossier NN,
+  etatPriseEnCharge NN,
+  dateAttenteEquipe NULL,
+  motifAttenteEquipe NULL,
   dateRetrait NULL,
   retirePar FK NULL -> UTILISATEUR,
-  motifRetrait NULL
+  motifRetrait NULL,
+  origineAjout NN,
+  motifAjout NULL
 )
 
 AFFECTATION(
@@ -177,6 +200,10 @@ AFFECTATION(
   motif NULL,
   observation NULL,
   dateFinAffectation NULL,
+  decisionEquipe NN,
+  reponduPar FK NULL -> UTILISATEUR,
+  dateReponseEquipe NULL,
+  motifRefusEquipe NULL,
   referenceOperationUnique UQ NULL,
   FK(idDossier, idTypeDechet) -> CONTENU_DOSSIER(idDossier, idTypeDechet),
   FK(idCompetenceEquipe, idEquipe, idTypeDechet) -> COMPETENCE_EQUIPE(idCompetenceEquipe, idEquipe, idTypeDechet)
@@ -187,6 +214,7 @@ INTERVENTION(
   idAffectation FK NN -> AFFECTATION,
   dateHeureDebut NULL,
   dateHeureFin NULL,
+  dateSoumissionCompteRendu NULL,
   statutIntervention NN,
   resultatIntervention NULL,
   compteRendu NULL,
@@ -200,7 +228,17 @@ PHOTO_INTERVENTION(
   referencePhoto NN,
   contextePhoto NN,
   description NULL,
-  dateAjout NN
+  dateAjout NN,
+  dateExpiration NN,
+  mediaPurgeAt NULL,
+  mediaStockeeLocale BOOLEAN NN,
+  etatPublication NN,
+  referencePhotoPublique NULL,
+  floutageConfirme BOOLEAN NN,
+  varianteSoumisePar FK NULL -> UTILISATEUR,
+  dateSoumissionVariante NULL,
+  approuvePar FK NULL -> UTILISATEUR,
+  dateApprobation NULL
 )
 
 VERIFICATION_RESOLUTION(
@@ -243,11 +281,214 @@ EVENEMENT_METIER(
   versionSchema NN,
   FK(idDossierContenuCible, idTypeDechetContenuCible) -> CONTENU_DOSSIER(idDossier, idTypeDechet)
 )
+
+DEMANDE_COMPLEMENT(
+  idDemande PK,
+  idSignalement FK NN -> SIGNALEMENT,
+  demandePar FK NN -> UTILISATEUR,
+  dateDemande NN,
+  motif NN,
+  etatDemande NN
+)
+
+REPONSE_COMPLEMENT(
+  idReponse PK,
+  idDemande FK UQ NN -> DEMANDE_COMPLEMENT,
+  reponduPar FK NN -> UTILISATEUR,
+  dateReponse NN,
+  contenu NN
+)
+
+QUALIFICATION_SIGNALEMENT(
+  idQualification PK,
+  idSignalement FK NN -> SIGNALEMENT,
+  idTypeDechet FK NN -> TYPE_DECHET,
+  quantiteEstimee DECIMAL NULL,
+  uniteQuantite NULL,
+  quantiteEstimeeLegacy NULL,
+  volumeEstime NULL,
+  remarque NULL,
+  qualifiePar FK NN -> UTILISATEUR,
+  dateQualification NN,
+  etatQualification NN,
+  motifRetrait NULL,
+  UQ(idQualification, idSignalement, idTypeDechet)
+)
+
+PROVENANCE_CONTENU_DOSSIER(
+  idDossier PK/FK -> CONTENU_DOSSIER,
+  idTypeDechet PK/FK -> CONTENU_DOSSIER,
+  idQualification PK,
+  dateDebut PK,
+  idSignalement FK NN -> SIGNALEMENT,
+  idRattachement FK NN -> RATTACHEMENT_SIGNALEMENT,
+  ajoutePar FK NN -> UTILISATEUR,
+  dateFin NULL,
+  motif NULL,
+  FK(idQualification, idSignalement, idTypeDechet)
+    -> QUALIFICATION_SIGNALEMENT(idQualification, idSignalement, idTypeDechet)
+)
+
+IDEMPOTENCE_SIGNALEMENT(
+  idUtilisateur PK/FK -> UTILISATEUR,
+  cleIdempotence PK,
+  empreinteRequete NN,
+  idSignalement FK UQ NN -> SIGNALEMENT,
+  dateCreation NN
+)
+
+REGION(idRegion PK, codeRegion UQ NULL, nomRegion UQ NN, actif BOOLEAN NN)
+DEPARTEMENT(
+  idDepartement PK,
+  idRegion FK NN -> REGION,
+  codeDepartement NULL,
+  nomDepartement NN,
+  actif BOOLEAN NN,
+  UQ(idDepartement, idRegion),
+  UQ(idRegion, codeDepartement),
+  UQ(idRegion, nomDepartement)
+)
+COMMUNE(
+  idCommune PK,
+  idDepartement FK NN -> DEPARTEMENT,
+  codeCommune NULL,
+  nomCommune NN,
+  actif BOOLEAN NN,
+  UQ(idCommune, idDepartement),
+  UQ(idDepartement, codeCommune),
+  UQ(idDepartement, nomCommune)
+)
+
+DELEGATION_DECISION_EQUIPE(
+  idDelegation PK,
+  idEquipe FK NN -> EQUIPE,
+  idUtilisateurDelegue FK NN -> UTILISATEUR,
+  dateDebutAppartenance NN,
+  typeDecision NN,
+  deleguePar FK NN -> UTILISATEUR,
+  dateDebut NN,
+  dateFin NULL,
+  motif NULL,
+  UQ(idEquipe, idUtilisateurDelegue, typeDecision, dateDebut)
+)
+
+DISPONIBILITE_EQUIPE(
+  idEquipe PK/FK -> EQUIPE,
+  etatDisponibilite NN,
+  miseAJourPar FK NN -> UTILISATEUR,
+  dateMiseAJour NN,
+  valideJusqua NN,
+  commentaire NULL
+)
+HISTORIQUE_DISPONIBILITE_EQUIPE(
+  idHistorique PK,
+  idEquipe FK NN -> EQUIPE,
+  etatDisponibilite NN,
+  miseAJourPar FK NN -> UTILISATEUR,
+  dateMiseAJour NN,
+  valideJusqua NN,
+  commentaire NULL
+)
+
+HISTORIQUE_LOCALISATION_DOSSIER(
+  idHistorique PK,
+  idDossier FK NN -> DOSSIER_TRAITEMENT,
+  idCommune FK NULL -> COMMUNE,
+  latitude NULL,
+  longitude NULL,
+  precisionLocalisation NULL,
+  descriptionLocalisation NULL,
+  modifiePar FK NN -> UTILISATEUR,
+  dateModification NN,
+  motif NULL
+)
+HISTORIQUE_PRIORITE_DOSSIER(
+  idHistorique PK,
+  idDossier FK NN -> DOSSIER_TRAITEMENT,
+  priorite NN,
+  definiePar FK NN -> UTILISATEUR,
+  dateDefinition NN,
+  justification NN
+)
+HISTORIQUE_POINTS(
+  idPoint PK,
+  idUtilisateur FK NN -> UTILISATEUR,
+  idSignalement FK NULL -> SIGNALEMENT,
+  points NN,
+  dateAttribution NN,
+  motif NN,
+  typeMouvement NN,
+  idPointOrigine FK NULL -> HISTORIQUE_POINTS
+)
+NOTIFICATION(
+  idNotification PK,
+  idUtilisateur FK NN -> UTILISATEUR,
+  titre NN,
+  message NN,
+  lu BOOLEAN NN,
+  dateCreation NN,
+  lienCible NULL
+)
+
+PREFERENCES_VISIBILITE_CITOYEN(
+  idUtilisateur PK/FK -> UTILISATEUR,
+  afficherAvatar BOOLEAN NN,
+  afficherNomPublic BOOLEAN NN,
+  nomPublic NULL,
+  afficherPoints BOOLEAN NN,
+  afficherRang BOOLEAN NN,
+  afficherBadges BOOLEAN NN,
+  participerClassement BOOLEAN NN
+)
+BADGE(idBadge PK, codeBadge UQ NN, libelle NN, description NULL, actif BOOLEAN NN)
+BADGE_UTILISATEUR(
+  idUtilisateur PK/FK -> UTILISATEUR,
+  idBadge PK/FK -> BADGE,
+  dateAttribution NN,
+  attribuePar FK NULL -> UTILISATEUR,
+  motif NULL
+)
+SESSION(
+  idSession PK,
+  idUtilisateur FK NN -> UTILISATEUR,
+  token UQ NN,
+  clientType NN,
+  dateCreation NN,
+  dateExpiration NN,
+  estActif BOOLEAN NN,
+  ipAddress NULL,
+  userAgent NULL
+)
+
+PUBLICATION_FLUX(
+  idPublication PK,
+  idSignalement FK NULL -> SIGNALEMENT,
+  idDossier FK NULL -> DOSSIER_TRAITEMENT,
+  creePar FK NN -> UTILISATEUR,
+  dateCreation NN,
+  etatPublication NN,
+  approuvePar FK NULL -> UTILISATEUR,
+  dateApprobation NULL,
+  datePublication NULL,
+  motifDecision NULL
+)
+PHOTO_PUBLICATION(
+  idPhotoPublication PK,
+  idPublication FK NN -> PUBLICATION_FLUX,
+  idPhotoSignalement FK NULL -> PHOTO_SIGNALEMENT,
+  idPhotoIntervention FK NULL -> PHOTO_INTERVENTION,
+  rolePhoto NN,
+  dateAjout NN,
+  UQ(idPublication, idPhotoSignalement),
+  UQ(idPublication, idPhotoIntervention)
+)
 ```
+
+`SESSION.token` est le nom logique/physique conservé par le schéma SQL et Prisma ; sa valeur contient exclusivement le condensat SHA-256 du jeton opaque, jamais le bearer token en clair.
 
 ## 3. Contraintes d'intégrité complémentaires
 
-Les clés seules ne suffisent pas à exprimer toutes les règles métier. Les contraintes suivantes font partie de la spécification logique ; leur mise en œuvre technique sera précisée après le choix de l'architecture.
+Les clés seules ne suffisent pas à exprimer toutes les règles métier. Les contraintes natives et les invariants techniques listés ci-dessous sont portés par les migrations SQL versionnées et/ou les transactions API. Prisma décrit les colonnes, relations, clés et index modélisables ; les contraintes `CHECK`, index partiels et déclencheurs restent explicitement versionnés en SQL.
 
 1. **Périodes valides.** Dans `UTILISATEUR_ROLE`, `APPARTENANCE_EQUIPE` et `COMPETENCE_EQUIPE`, la date de fin ne précède pas la date de début. Les périodes incompatibles ne se chevauchent pas.
 2. **Coordonnées.** `latitude` et `longitude` sont renseignées ensemble et dans des plages valides. Si elles sont absentes, une description ou un repère exploitable est requis avant affectation.
@@ -267,7 +508,13 @@ Les clés seules ne suffisent pas à exprimer toutes les règles métier. Les co
 16. **Minimisation.** `donneesAvant` et `donneesApres` ne contiennent ni secrets d'authentification ni informations personnelles non nécessaires. La politique de conservation demeure limitée par la finalité et les obligations applicables.
 17. **État de la catégorie dans le dossier.** `INCLUSE` exige `dateRetrait`, `retirePar` et `motifRetrait` NULL. `RETIRE` exige ces trois valeurs renseignées et aucune affectation courante associée. La transition de retrait ou de réactivation est historisée.
 18. **Transfert externe hors périmètre.** Un transfert vers un service externe est enregistré par un événement qui cible le dossier (`idDossierCible`) et conserve un libellé de destinataire dans `destinataireExterne`, avec la date, l’acteur et le motif requis. Le système ne crée pas de dossier organisationnel ni de référence étrangère pour le destinataire et ne prétend pas suivre son traitement interne.
-19. **Référentiels.** Les états, priorités, catégories, niveaux de risque, résultats d'intervention, résultats de vérification, types de rattachement et origines d'événement ont des définitions contrôlées.
+19. **Référentiels.** Les états, priorités, catégories, niveaux de risque, résultats d'intervention, résultats de vérification, types de rattachement et origines de provenance sont contrôlés. Les codes exposés sont listés dans le dictionnaire ; les décisions du scénario académique et les réserves de validation réelle sont dans `decisions-conception.md`.
+20. **Provenance des catégories.** `CONTENU_DOSSIER.origineAjout` vaut `SIGNALEMENT`, `CREATION_DOSSIER`, `AJOUT_MANUEL` ou `HISTORIQUE_NON_DETERMINE`. Seul `AJOUT_MANUEL` porte un `motifAjout` d'au moins 10 caractères ; les autres origines ont un motif nul. Les migrations `20261024130500` et `20261024130600` imposent ces règles.
+21. **Résultats exceptionnels.** `INTERVENTION.resultatIntervention` est borné à la liste partagée ; tout résultat autre que `SUCCES_TOTAL` exige `motifException` d'au moins 10 caractères. Une vérification autre que `CONFORME_RESOLU` exige également un motif. Ces contrôles sont exprimés par `CHECK` SQL et validation API.
+22. **Conservation photo.** `PHOTO_SIGNALEMENT` et `PHOTO_INTERVENTION` portent une expiration un an après `dateAjout`, une date de purge, l’indicateur de stockage local et l’état de publication. Les triggers de migration recalculent l’expiration à partir de la date de référence ; le script de purge supprime les médias mais conserve leur historique métier.
+23. **Photo publiée.** Une ligne `PHOTO_PUBLICATION` référence exactement une photo source (signalement ou intervention). Les photos publiques utilisent une variante approuvée distincte de l’original et expirent avec le média ; les triggers de garde et routes contrôlées portent les règles non représentables par les FK seules.
+24. **Sessions.** Le champ SQL `session.token` contient le condensat SHA-256 du jeton opaque, jamais le jeton bearer en clair. Sa longueur et son unicité sont contrôlées.
+25. **Agrégation du statut dossier.** `etatPriseEnCharge` est mis à jour avec chaque transition de catégorie, affectation, intervention et vérification. La fonction SQL `recalculer_statut_dossier` agrège les seuls volets `INCLUSE` dans l’ordre : aucun volet → `A_QUALIFIER` ; au moins un `A_AFFECTER`/`EN_ATTENTE_EQUIPE` → `EN_ATTENTE_AFFECTATION` ; sinon un `AFFECTEE`/`EN_COURS` → `EN_COURS_DE_TRAITEMENT` ; sinon `A_VERIFIER` ou tous `TERMINEE` → `EN_ATTENTE_VERIFICATION`. Les états `CLOS_*` ne sont écrits que par une commande de clôture explicite. La fonction et son backfill sont versionnés dans la migration `20261024130700_dossier_status_aggregation`.
 
 ## 4. Notes de conception
 
@@ -285,4 +532,4 @@ Les champs de statut représentent l'état courant. `EVENEMENT_METIER` conserve 
 
 ## 5. Limites
 
-Le MLD est logique et ne choisit aucune technologie particulière. Les points citoyens sont hors du schéma initial. Aucune table `ZONE` ni `ORGANISATION` n’est modélisée dans le périmètre initial : la localisation cartographique ne détermine pas automatiquement l’équipe à affecter, et les rôles/événements portent les décisions de traitement. Un transfert externe est tracé par événement sans modéliser le destinataire comme entité interne. Les durées de conservation et les obligations réglementaires doivent être validées avant toute mise en service réelle.
+Le MLD est logique et ne choisit aucune technologie particulière. Les points citoyens sont inscrits dans `HISTORIQUE_POINTS` comme mouvements d’attribution et de compensation, conformément à DC-29. Aucune table `ZONE` ni `ORGANISATION` n’est modélisée dans le périmètre initial : la localisation cartographique ne détermine pas automatiquement l’équipe à affecter, et les rôles/événements portent les décisions de traitement. Un transfert externe est tracé par événement sans modéliser le destinataire comme entité interne. Les durées de conservation et les obligations réglementaires doivent être validées avant toute mise en service réelle.

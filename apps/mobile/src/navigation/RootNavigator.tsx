@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useAuth } from '../context/AuthContext.js';
 import { useOnboarding } from '../context/OnboardingContext.js';
+import { useTheme } from '../context/ThemeContext.js';
 import { SplashScreen } from '../screens/common/SplashScreen.js';
 import { OnboardingScreen } from '../screens/onboarding/OnboardingScreen.js';
 import { LoginScreen } from '../screens/auth/LoginScreen.js';
@@ -12,6 +13,7 @@ export const RootNavigator: React.FC = () => {
   const [isSplashFinished, setIsSplashFinished] = useState(false);
   const { user, token, loading, isTerrainAgent } = useAuth();
   const { hasCompletedOnboarding, loadingOnboarding } = useOnboarding();
+  const { colors, loadingTheme } = useTheme();
 
   // 1. Splash Screen
   if (!isSplashFinished) {
@@ -19,10 +21,10 @@ export const RootNavigator: React.FC = () => {
   }
 
   // 2. Loading state after splash
-  if (loading || loadingOnboarding) {
+  if (loading || loadingOnboarding || loadingTheme) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#16a34a" />
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -50,6 +52,5 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
   },
 });

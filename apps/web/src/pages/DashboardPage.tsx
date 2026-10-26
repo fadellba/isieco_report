@@ -6,8 +6,10 @@ import {
   Activity,
   AlertTriangle,
   ArrowUpRight,
+  Box,
   Crosshair,
   Layers3,
+  Map,
   MapPin,
   RefreshCw,
   Signal,
@@ -20,6 +22,12 @@ import { api } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
 import './dashboard.css';
 import 'leaflet/dist/leaflet.css';
+
+const DakarScene3D = React.lazy(() =>
+  import('../components/DakarScene3D.js').then(({ DakarScene3D: Scene }) => ({
+    default: Scene,
+  }))
+);
 
 type MapPoint = CartePoint;
 type PointType = CartePoint['typeObjet'];
@@ -87,6 +95,7 @@ export const DashboardPage: React.FC<{ initialFilter?: PointFilter }> = ({
   const [points, setPoints] = useState<MapPoint[]>([]);
   const [unlocatedCount, setUnlocatedCount] = useState(0);
   const [selectedPoint, setSelectedPoint] = useState<MapPoint | null>(null);
+  const [viewMode, setViewMode] = useState<'scene' | 'map'>('scene');
   const [feedFilter, setFeedFilter] = useState<PointFilter>(initialFilter);
   const [visibleLayers, setVisibleLayers] = useState<Record<PointType, boolean>>({
     SIGNALEMENT: true,
@@ -135,11 +144,10 @@ export const DashboardPage: React.FC<{ initialFilter?: PointFilter }> = ({
   const canQualify = hasAnyRole([
     RoleCode.QUALIFICATION,
     RoleCode.TRAITEMENT,
-    RoleCode.ADMIN,
   ]);
-  const canVerify = hasAnyRole([RoleCode.VERIFICATION, RoleCode.ADMIN]);
-  const canAssign = hasAnyRole([RoleCode.AFFECTATION, RoleCode.ADMIN]);
-  const canManageDossiers = hasAnyRole([RoleCode.TRAITEMENT, RoleCode.ADMIN]);
+  const canVerify = hasAnyRole([RoleCode.VERIFICATION]);
+  const canAssign = hasAnyRole([RoleCode.AFFECTATION]);
+  const canManageDossiers = hasAnyRole([RoleCode.TRAITEMENT]);
   const pageTitle = initialFilter === 'INTERVENTION' ? 'Missions terrain' : 'Situation de la salubrité';
   const missionDestination = canVerify
     ? { to: '/verifications', label: 'Ouvrir le contrôle' }
@@ -220,7 +228,29 @@ export const DashboardPage: React.FC<{ initialFilter?: PointFilter }> = ({
       <div className="ops-workspace">
         <div className="ops-map-panel">
           <div className="ops-map-panel__toolbar">
-            <div className="ops-map-panel__title"><MapPin size={15} /> CARTE TERRAIN <span>· {mapPoints.length}</span></div>
+            <div className="ops-map-panel__title">
+              {viewMode === 'scene' ? <Box size={15} /> : <MapPin size={15} />}
+              {viewMode === 'scene' ? 'SCÈNE OPÉRATIONNELLE' : 'CARTE TERRAIN'}
+              <span>· {mapPoints.length}</span>
+            </div>
+            <div className="ops-view-toggle" role="group" aria-label="Mode de visualisation">
+              <button
+                type="button"
+                className={viewMode === 'scene' ? 'is-active' : ''}
+                aria-pressed={viewMode === 'scene'}
+                onClick={() => setViewMode('scene')}
+              >
+                <Box size={13} /> Scène 3D
+              </button>
+              <button
+                type="button"
+                className={viewMode === 'map' ? 'is-active' : ''}
+                aria-pressed={viewMode === 'map'}
+                onClick={() => setViewMode('map')}
+              >
+                <Map size={13} /> Carte exacte
+              </button>
+            </div>
             <div className="ops-map-filters" role="group" aria-label="Afficher ou masquer les couches cartographiques">
               {pointTypes.map((item) => (
                 <button
@@ -237,50 +267,65 @@ export const DashboardPage: React.FC<{ initialFilter?: PointFilter }> = ({
             <span className="ops-map-location"><MapPin size={14} /> Dakar, Sénégal</span>
           </div>
           <div className="ops-map-canvas">
-            <MapContainer
-              center={dakarCenter}
-              zoom={13}
-              scrollWheelZoom
-              zoomControl
-              className="ops-leaflet-map"
-            >
-              <FlyToSelectedPoint point={selectedPoint} />
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              />
-              {mapPoints.map((point) => {
-                const latitude = Number(point.latitude);
-                const longitude = Number(point.longitude);
-                if (
-                  !Number.isFinite(latitude) ||
-                  !Number.isFinite(longitude) ||
-                  latitude < -90 ||
-                  latitude > 90 ||
-                  longitude < -180 ||
-                  longitude > 180
-                ) return null;
-
-                return (
-                  <Marker
-                    key={`${point.typeObjet}-${point.id}`}
-                    position={[latitude, longitude]}
-                    icon={markerIcons[point.typeObjet]}
-                    eventHandlers={{
-                      click: () => {
-                        setFeedFilter(point.typeObjet);
-                        setSelectedPoint(point);
-                      },
-                    }}
+            {viewMode === 'scene' ? (
+              <React.Suspense fallback={<div className="ops-scene-loading" role="status">Préparation de la scène 3D…</div>}>
+                <DakarScene3D
+                  points={mapPoints}
+                  selectedPoint={selectedPoint}
+                  onSelect={(point) => {
+                    setFeedFilter(point.typeObjet);
+                    setSelectedPoint(point);
+                  }}
+                />
+              </React.Suspense>
+            ) : (
+              <>
+                <MapContainer
+                  center={dakarCenter}
+                  zoom={13}
+                  scrollWheelZoom
+                  zoomControl
+                  className="ops-leaflet-map"
+                >
+                  <FlyToSelectedPoint point={selectedPoint} />
+                  <TileLayer
+                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   />
-                );
-              })}
-            </MapContainer>
-            <div className="ops-map-caption">
-              <span><i className="ops-legend-dot ops-legend-dot--signalement" />Signalement</span>
-              <span><i className="ops-legend-dot ops-legend-dot--dossier" />Dossier</span>
-              <span><i className="ops-legend-dot ops-legend-dot--intervention" />Intervention</span>
-            </div>
+                  {mapPoints.map((point) => {
+                    const latitude = Number(point.latitude);
+                    const longitude = Number(point.longitude);
+                    if (
+                      !Number.isFinite(latitude) ||
+                      !Number.isFinite(longitude) ||
+                      latitude < -90 ||
+                      latitude > 90 ||
+                      longitude < -180 ||
+                      longitude > 180
+                    ) return null;
+
+                    return (
+                      <Marker
+                        key={`${point.typeObjet}-${point.id}`}
+                        position={[latitude, longitude]}
+                        icon={markerIcons[point.typeObjet]}
+                        eventHandlers={{
+                          click: () => {
+                            setFeedFilter(point.typeObjet);
+                            setSelectedPoint(point);
+                          },
+                        }}
+                      />
+                    );
+                  })}
+                </MapContainer>
+                <div className="ops-map-caption">
+                  <span><i className="ops-legend-dot ops-legend-dot--signalement" />Signalement</span>
+                  <span><i className="ops-legend-dot ops-legend-dot--dossier" />Dossier</span>
+                  <span><i className="ops-legend-dot ops-legend-dot--intervention" />Intervention</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 

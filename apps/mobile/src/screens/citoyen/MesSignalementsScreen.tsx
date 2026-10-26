@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,18 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { mobileApi } from '../../services/api.js';
 import { useOffline } from '../../context/OfflineContext.js';
 import { SignalementItem } from '../../types/index.js';
+import { useTheme } from '../../context/ThemeContext.js';
+import type { DesignTokens } from '@isieco/shared';
 
 export const MesSignalementsScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { isOnline, pendingCount, syncNow, syncing } = useOffline();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [signalements, setSignalements] = useState<SignalementItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -42,17 +47,17 @@ export const MesSignalementsScreen: React.FC<{ navigation: any }> = ({ navigatio
   const getStatusBadge = (statut: string) => {
     switch (statut) {
       case 'SOUMIS':
-        return { label: 'Reçu / En attente', bg: '#dbeafe', text: '#1d4ed8' };
+        return { label: 'Reçu / En attente', bg: colors.infoSurface, text: colors.info };
       case 'EN_COURS_DE_QUALIFICATION':
-        return { label: 'En cours d examen', bg: '#fef3c7', text: '#b45309' };
+        return { label: 'En cours d’examen', bg: colors.warningSurface, text: colors.warning };
       case 'ACCEPTE_POUR_RATTACHEMENT':
-        return { label: 'Accepté par la Ville', bg: '#ede9fe', text: '#6d28d9' };
+        return { label: 'Accepté par la Ville', bg: colors.infoSurface, text: colors.info };
       case 'RATTACHE':
-        return { label: 'Intégré au Dossier Travaux', bg: '#dcfce7', text: '#15803d' };
+        return { label: 'Intégré au Dossier Travaux', bg: colors.successSurface, text: colors.success };
       case 'REJETE':
-        return { label: 'Rejeté / Hors périmètre', bg: '#fee2e2', text: '#b91c1c' };
+        return { label: 'Rejeté / Hors périmètre', bg: colors.dangerSurface, text: colors.danger };
       default:
-        return { label: statut, bg: '#f1f5f9', text: '#475569' };
+        return { label: statut, bg: colors.surfaceRaised, text: colors.textSecondary };
     }
   };
 
@@ -75,13 +80,19 @@ export const MesSignalementsScreen: React.FC<{ navigation: any }> = ({ navigatio
             <TouchableOpacity
               style={styles.syncBtn}
               onPress={async () => {
-                await syncNow();
+                const result = await syncNow();
+                if (result.failed > 0) {
+                  Alert.alert(
+                    'Synchronisation partielle',
+                    `${result.synced} action(s) envoyée(s). ${result.failed} action(s) restent en attente.`,
+                  );
+                }
                 await fetchMine();
               }}
               disabled={syncing}
             >
               {syncing ? (
-                <ActivityIndicator color="#ffffff" size="small" />
+                <ActivityIndicator color={colors.warning} size="small" />
               ) : (
                 <Text style={styles.syncBtnText}>Synchroniser</Text>
               )}
@@ -92,7 +103,7 @@ export const MesSignalementsScreen: React.FC<{ navigation: any }> = ({ navigatio
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#16a34a" />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Chargement de vos signalements...</Text>
         </View>
       ) : (
@@ -100,7 +111,7 @@ export const MesSignalementsScreen: React.FC<{ navigation: any }> = ({ navigatio
           data={signalements}
           keyExtractor={(item) => item.idSignalement}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#16a34a']} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
           }
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
@@ -157,10 +168,10 @@ export const MesSignalementsScreen: React.FC<{ navigation: any }> = ({ navigatio
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: DesignTokens) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
   },
   center: {
     flex: 1,
@@ -170,12 +181,12 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 12,
-    color: '#64748b',
+    color: colors.textSecondary,
   },
   offlineBanner: {
-    backgroundColor: '#fffbeb',
+    backgroundColor: colors.warningSurface,
     borderBottomWidth: 1,
-    borderColor: '#fef3c7',
+    borderColor: colors.warning,
     padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -188,21 +199,21 @@ const styles = StyleSheet.create({
   offlineTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#b45309',
+    color: colors.warning,
   },
   offlineSubtitle: {
     fontSize: 10,
-    color: '#78350f',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   syncBtn: {
-    backgroundColor: '#b45309',
+    backgroundColor: colors.warningSurface,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
   },
   syncBtnText: {
-    color: '#ffffff',
+    color: colors.warning,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -211,11 +222,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   itemCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOpacity: 0.03,
     shadowRadius: 6,
@@ -231,7 +242,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: 'monospace',
     fontWeight: '800',
-    color: '#0f172a',
+    color: colors.textPrimary,
   },
   badge: {
     paddingHorizontal: 8,
@@ -244,7 +255,7 @@ const styles = StyleSheet.create({
   },
   itemDescription: {
     fontSize: 13,
-    color: '#334155',
+    color: colors.textSecondary,
     lineHeight: 18,
     marginBottom: 10,
   },
@@ -253,17 +264,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderTopWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: colors.border,
     paddingTop: 8,
   },
   itemLoc: {
     fontSize: 11,
-    color: '#64748b',
+    color: colors.textSecondary,
     flex: 1,
   },
   itemDate: {
     fontSize: 10,
-    color: '#94a3b8',
+    color: colors.textSecondary,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -278,24 +289,24 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#0f172a',
+    color: colors.textPrimary,
     marginBottom: 6,
   },
   emptySubtitle: {
     fontSize: 12,
-    color: '#64748b',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 18,
     marginBottom: 20,
   },
   createBtn: {
-    backgroundColor: '#16a34a',
+    backgroundColor: colors.primary,
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 12,
   },
   createBtnText: {
-    color: '#ffffff',
+    color: colors.onPrimary,
     fontSize: 12,
     fontWeight: '700',
   },

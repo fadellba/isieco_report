@@ -2,7 +2,7 @@
 
 > **Territoire Pilote :** Ville de Dakar (Dakar-Plateau & Médina)  
 > **Projet de Fin d'Études (PFE) — Institut Supérieur d'Informatique (ISI Dakar)**  
-> **Stack Technologique :** PostgreSQL 17 (DBngin) • Fastify REST • React 19 (Vite + Tailwind CSS 4 + Leaflet) • React Native 0.88 (Expo SDK 58)
+> **Stack Technologique :** PostgreSQL 17 (DBngin) • Fastify REST • React 19 (Vite + Tailwind CSS 4 + Leaflet + Three.js) • React Native 0.88 (Expo SDK 58)
 
 ---
 
@@ -20,7 +20,7 @@ Le système met en relation directe les **citoyens**, les **cellules communales 
 isieco-repport/
 ├── apps/
 │   ├── api/                  # API REST Fastify (Auth Dual-Client, RBAC, 34 tests Vitest)
-│   ├── web/                  # Back-Office Web (React 19, Leaflet, Tailwind CSS 4)
+│   ├── web/                  # Back-Office Web (React 19, Leaflet, Three.js, Tailwind CSS 4)
 │   └── mobile/               # App Mobile Nomade (Expo SDK 58, React Native 0.88, Offline-First)
 │
 ├── packages/
@@ -36,6 +36,26 @@ isieco-repport/
 ├── tsconfig.base.json        # Configuration TypeScript partagée
 └── README.md                 # Guide d'accueil et documentation de démarrage
 ```
+
+### Architecture du backend API
+
+Le backend Fastify sépare les responsabilités selon le sens des dépendances :
+
+```text
+modules/*                 Adaptateurs HTTP Fastify
+        ↓
+application/use-cases     Orchestration des cas d’usage
+application/ports         Contrats des dépôts et services
+domain                    Règles et erreurs métier
+        ↑
+infrastructure/*          Adaptateurs Prisma, stockage et sécurité
+
+composition-root.ts       Assemblage des implémentations et injection
+```
+
+Les routes ne construisent pas de dépôts Prisma et ne contiennent pas de SQL ; elles traduisent les requêtes/réponses HTTP et délèguent aux cas d’usage. Les cas d’usage dépendent des ports, et l’infrastructure fournit leurs implémentations. Un modèle de domaine explicite est ajouté lorsque des règles ou invariants le justifient, plutôt que de créer des entités artificielles pour les simples lectures.
+
+L’adaptateur SQL historique reste disponible pour le seed de démonstration ; il n’est plus utilisé par les routes runtime de l’API. Le schéma de données et les migrations Prisma restent séparés du code métier.
 
 ---
 
@@ -65,6 +85,10 @@ npm install
 | **Back-Office Web** | `npm run dev:web` | `http://localhost:5173` | Portail de gestion communale |
 | **App Mobile** | `npm run dev:mobile` | `npx expo start` | App nomade citoyens & terrain |
 
+Le tableau de bord Web propose une scène 3D schématique interactive des objets géolocalisés.
+Elle visualise leurs positions relatives, mais ne représente pas le relief ni le bâti réels de Dakar ;
+utilisez **Carte exacte** pour vérifier leur emplacement sur OpenStreetMap.
+
 Les photos de signalement sont stockées dans le répertoire privé `uploads/` de l'API par défaut.
 En production, `UPLOAD_DIR` doit désigner un chemin absolu vers un volume persistant, chiffré,
 sauvegardé et accessible en lecture/écriture uniquement par le compte système de l'API. Placez-le
@@ -73,6 +97,26 @@ et vérification des droits. Le démarrage en production échoue si `UPLOAD_DIR`
 Les photos sont re-encodées côté serveur pour retirer les métadonnées EXIF et l'orientation est
 appliquée avant stockage. Définissez une politique de rétention et vérifiez régulièrement la
 restauration conjointe de la base de données et des fichiers.
+
+En production, configurez `DATABASE_URL`, `COOKIE_SECRET` (secret aléatoire d'au moins 32 caractères),
+`CORS_ORIGINS` (liste exacte d'origines HTTPS séparées par des virgules)
+et `UPLOAD_DIR` (chemin absolu). L'API refuse de démarrer si ces paramètres obligatoires sont
+absents ou invalides. Terminez le TLS au niveau du reverse proxy et n'exposez pas le serveur
+Fastify directement sur Internet sans cette terminaison HTTPS. La limitation des connexions est
+en mémoire par processus ; un déploiement multi-instance nécessite un magasin partagé.
+Pour un build mobile de production, définissez également `EXPO_PUBLIC_API_URL` sur l’URL HTTPS
+publique de l’API. Cette URL est intégrée au build et les changements manuels d’URL sont réservés
+aux builds de développement.
+
+La purge des photos expirées est exécutée par un worker séparé de l’API. En production,
+lancez `npm --workspace=@isieco/api run build`, puis `npm --workspace=@isieco/api run retention:photos:worker` sous un gestionnaire de processus
+qui le redémarre après un arrêt ; fournissez-lui les mêmes `DATABASE_URL` et `UPLOAD_DIR` que l’API.
+Le worker lance un cycle au démarrage puis toutes les 24 heures par défaut ; définissez
+`PHOTO_RETENTION_INTERVAL_HOURS` à un entier de 1 à 168 pour modifier cette fréquence. Un verrou
+advisory PostgreSQL empêche plusieurs workers de purger simultanément. Les journaux du processus
+signalent les cycles réussis, les verrous détenus ailleurs et les erreurs ; surveillez les erreurs
+dans votre système d’exploitation. En déploiement multi-instance, le worker et toutes les instances
+qui accèdent aux photos locales doivent partager le même volume persistant `UPLOAD_DIR`.
 
 Pour peupler une base de développement avec trois signalements illustrés sur la carte, lancez
 `npm --workspace=@isieco/api run seed:demo` depuis la racine du dépôt. Ce seed est idempotent;
@@ -87,10 +131,14 @@ Web de développement.
 
 ## 5. Validation & Tests Automatisés
 
-Le système intègre une suite de tests d'acceptation automatisés couvrant l'ensemble des scénarios nominaux et d'exception (T01 à T39) directement sur PostgreSQL :
+Le système intègre une suite de tests d'acceptation automatisés sur PostgreSQL pour les parcours
+nominaux, les principales exceptions métier et les invariants de base de données. La matrice
+T01–T39 documente aussi des scénarios qui ne sont pas tous automatisés ; voir
+[l’audit de couverture métier](docs/audit-couverture-metier-api.md) pour les limites et les tests
+effectivement exécutés :
 
 ```bash
-# Exécuter les 34 tests d'acceptation (Fastify + PostgreSQL isieco_test)
+# Exécuter les tests d'acceptation (Fastify + PostgreSQL isieco_test)
 npm run test:api
 
 # Vérification du typage strict TypeScript sur tous les modules

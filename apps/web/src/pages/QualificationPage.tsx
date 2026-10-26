@@ -24,12 +24,16 @@ import {
 export const QualificationPage: React.FC = () => {
   const [signalements, setSignalements] = useState<SignalementQualification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedSignalement, setSelectedSignalement] = useState<SignalementQualification | null>(null);
   const [doublons, setDoublons] = useState<SignalementDoublonCandidat[]>([]);
   const [loadingDoublons, setLoadingDoublons] = useState(false);
+  const [doublonError, setDoublonError] = useState<string | null>(null);
   const [photos, setPhotos] = useState<SignalementPhotoItem[]>([]);
   const [loadingPhotos, setLoadingPhotos] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
   const selectedSignalementId = useRef<string | null>(null);
 
   // Modale de rejet avec motif
@@ -39,11 +43,29 @@ export const QualificationPage: React.FC = () => {
   const fetchInbox = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const res = await api.get<ApiListResponse<SignalementQualification>>('/qualification/boite-reception');
-      setSignalements(res.data || []);
-      if (res.data && res.data.length > 0 && !selectedSignalement) {
-        handleSelectSignalement(res.data[0]);
+      const data = res.data || [];
+      setSignalements(data);
+      const currentSelectionId = selectedSignalementId.current;
+      if (currentSelectionId) {
+        const updatedSelection = data.find(
+          (signalement) => signalement.idSignalement === currentSelectionId
+        );
+        if (updatedSelection) {
+          setSelectedSignalement(updatedSelection);
+        } else {
+          selectedSignalementId.current = null;
+          setSelectedSignalement(null);
+        }
+      } else if (data.length > 0) {
+        void handleSelectSignalement(data[0]);
+      } else {
+        selectedSignalementId.current = null;
+        setSelectedSignalement(null);
       }
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Impossible de charger la boîte de qualification.');
     } finally {
       setLoading(false);
     }
@@ -59,6 +81,8 @@ export const QualificationPage: React.FC = () => {
     setLoadingDoublons(true);
     setLoadingPhotos(true);
     setPhotos([]);
+    setDoublons([]);
+    setDoublonError(null);
     setPhotoError(null);
 
     const [duplicatesResult, detailResult] = await Promise.allSettled([
@@ -75,7 +99,9 @@ export const QualificationPage: React.FC = () => {
     if (duplicatesResult.status === 'fulfilled') {
       setDoublons(duplicatesResult.value.candidates || []);
     } else {
-      setDoublons([]);
+      setDoublonError(duplicatesResult.reason instanceof Error
+        ? duplicatesResult.reason.message
+        : 'Impossible d’analyser les signalements proches.');
     }
     setLoadingDoublons(false);
 
@@ -88,30 +114,70 @@ export const QualificationPage: React.FC = () => {
   };
 
   const handleExaminer = async (id: string) => {
-    await api.post(`/qualification/signalements/${id}/examiner`);
-    await fetchInbox();
+    try {
+      setActionLoading(true);
+      setActionFeedback(null);
+      await api.post(`/qualification/signalements/${id}/examiner`);
+      setActionFeedback({ type: 'success', message: 'Le signalement est maintenant en cours d’examen.' });
+      await fetchInbox();
+    } catch (error) {
+      setActionFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Impossible de prendre ce signalement en examen.',
+      });
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleQualifier = async (id: string) => {
-    await api.post(`/qualification/signalements/${id}/qualifier`, {
-      motif: 'Signalement recevable, géolocalisé et conforme aux critères de salubrité.',
-    });
-    setSelectedSignalement(null);
-    await fetchInbox();
+    try {
+      setActionLoading(true);
+      setActionFeedback(null);
+      await api.post(`/qualification/signalements/${id}/qualifier`, {
+        motif: 'Signalement recevable, géolocalisé et conforme aux critères de salubrité.',
+      });
+      setSelectedSignalement(null);
+      selectedSignalementId.current = null;
+      setActionFeedback({ type: 'success', message: 'Signalement accepté pour rattachement.' });
+      await fetchInbox();
+    } catch (error) {
+      setActionFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Impossible de qualifier ce signalement.',
+      });
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleConfirmRejet = async (motif: string) => {
     if (!signalementToReject) return;
-    await api.post(`/qualification/signalements/${signalementToReject}/rejeter`, { motif });
-    setSelectedSignalement(null);
-    setSignalementToReject(null);
-    await fetchInbox();
+    try {
+      setActionLoading(true);
+      setActionFeedback(null);
+      await api.post(`/qualification/signalements/${signalementToReject}/rejeter`, { motif });
+      setSelectedSignalement(null);
+      selectedSignalementId.current = null;
+      setSignalementToReject(null);
+      setRejectModalOpen(false);
+      setActionFeedback({ type: 'success', message: 'Signalement rejeté ; le motif est enregistré et le citoyen sera notifié.' });
+      await fetchInbox();
+    } catch (error) {
+      setActionFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Impossible de rejeter ce signalement.',
+      });
+      throw error;
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="ops-workflow-page p-6 space-y-6">
       {/* Title & Actions */}
-      <div className="flex items-center justify-between">
+      <div className="ops-workflow-heading flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-isieco-dark flex items-center gap-2">
             <Inbox className="h-6 w-6 text-isieco-primary" />
@@ -131,11 +197,47 @@ export const QualificationPage: React.FC = () => {
         </button>
       </div>
 
+      <div className="ops-workflow-metrics" aria-label="Aperçu de la qualification">
+        <article className="ops-workflow-metric">
+          <span>À qualifier</span>
+          <strong>{loading ? '—' : signalements.length}</strong>
+          <small>Signalements dans la boîte</small>
+        </article>
+        <article className="ops-workflow-metric">
+          <span>Localisés par GPS</span>
+          <strong>{loading ? '—' : signalements.filter((signalement) => signalement.latitude !== null && signalement.latitude !== undefined).length}</strong>
+          <small>Coordonnées fournies</small>
+        </article>
+        <article className="ops-workflow-metric">
+          <span>Repères textuels</span>
+          <strong>{loading ? '—' : signalements.filter((signalement) => signalement.latitude === null || signalement.latitude === undefined).length}</strong>
+          <small>Localisation à vérifier</small>
+        </article>
+      </div>
+
+      {loadError && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs text-rose-700" role="alert">
+          <span>Erreur de chargement : {loadError}</span>
+          <button type="button" onClick={() => void fetchInbox()} className="font-semibold underline">
+            Réessayer
+          </button>
+        </div>
+      )}
+
+      {actionFeedback && (
+        <div
+          className={`rounded-xl border p-4 text-xs ${actionFeedback.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-700'}`}
+          role={actionFeedback.type === 'error' ? 'alert' : 'status'}
+        >
+          {actionFeedback.message}
+        </div>
+      )}
+
       {/* Main Split-View Workspace */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[600px]">
+      <div className="ops-workflow-grid grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[600px]">
         
         {/* Left Column : Inbox List (5 cols) */}
-        <div className="lg:col-span-5 rounded-xl border border-isieco-border bg-white shadow-sm flex flex-col">
+        <div className="ops-workflow-panel lg:col-span-5 rounded-xl border border-isieco-border bg-white shadow-sm flex flex-col">
           <div className="border-b border-isieco-border p-3.5 bg-gray-50/70 flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-isieco-dark">
               En attente d examen ({signalements.length})
@@ -145,14 +247,20 @@ export const QualificationPage: React.FC = () => {
           <div className="divide-y divide-isieco-border overflow-y-auto max-h-[650px] flex-1">
             {signalements.length === 0 ? (
               <div className="p-8 text-center text-xs text-isieco-muted">
-                Aucun signalement en attente de qualification.
+                {loading
+                  ? 'Chargement des signalements…'
+                  : loadError
+                    ? 'Les signalements ne sont pas disponibles.'
+                    : 'Aucun signalement en attente de qualification.'}
               </div>
             ) : (
               signalements.map((s) => (
-                <div
+                <button
+                  type="button"
                   key={s.idSignalement}
                   onClick={() => handleSelectSignalement(s)}
-                  className={`p-4 cursor-pointer transition-colors ${
+                  aria-pressed={selectedSignalement?.idSignalement === s.idSignalement}
+                  className={`block w-full p-4 text-left cursor-pointer transition-colors ${
                     selectedSignalement?.idSignalement === s.idSignalement
                       ? 'bg-emerald-50/70 border-l-4 border-isieco-primary'
                       : 'hover:bg-gray-50'
@@ -186,16 +294,16 @@ export const QualificationPage: React.FC = () => {
                       </span>
                     )}
                   </div>
-                </div>
+                </button>
               ))
             )}
           </div>
         </div>
 
         {/* Right Column : Split View Comparateur & Doublons (7 cols) */}
-        <div className="lg:col-span-7 space-y-4">
+        <div className="ops-workflow-detail lg:col-span-7 space-y-4">
           {selectedSignalement ? (
-            <div className="rounded-xl border border-isieco-border bg-white p-5 shadow-sm space-y-4">
+            <div className="ops-workflow-panel rounded-xl border border-isieco-border bg-white p-5 shadow-sm space-y-4">
               {/* Selected Signalement Details */}
               <div className="border-b border-isieco-border pb-4">
                 <div className="flex items-center justify-between">
@@ -288,6 +396,10 @@ export const QualificationPage: React.FC = () => {
                   <div className="p-4 text-center text-xs text-isieco-muted">
                     Analyse des proximités géodésiques en cours...
                   </div>
+                ) : doublonError ? (
+                  <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700" role="alert">
+                    Analyse des doublons indisponible : {doublonError}
+                  </div>
                 ) : doublons.length === 0 ? (
                   <div className="rounded-lg bg-emerald-50/70 p-3 text-xs text-emerald-800 border border-emerald-200">
                     ✓ Aucun doublon détecté dans un rayon de 500 mètres. Observation unique présumée.
@@ -322,10 +434,12 @@ export const QualificationPage: React.FC = () => {
               </div>
 
               {/* Action Buttons */}
+              {actionLoading && <p className="text-xs text-isieco-muted" role="status">Enregistrement de l’action…</p>}
               <div className="border-t border-isieco-border pt-4 flex flex-wrap items-center justify-between gap-3">
                 {selectedSignalement.statutSignalement === 'SOUMIS' && (
                   <button
-                    onClick={() => handleExaminer(selectedSignalement.idSignalement)}
+                    onClick={() => void handleExaminer(selectedSignalement.idSignalement)}
+                    disabled={actionLoading}
                     className="flex items-center gap-1.5 rounded-lg border border-isieco-border px-3 py-2 text-xs font-semibold text-isieco-dark hover:bg-gray-100"
                   >
                     <Eye className="h-4 w-4 text-blue-600" />
@@ -335,6 +449,8 @@ export const QualificationPage: React.FC = () => {
 
                 <div className="flex items-center gap-2 ml-auto">
                   <button
+                    type="button"
+                    disabled={actionLoading}
                     onClick={() => {
                       setSignalementToReject(selectedSignalement.idSignalement);
                       setRejectModalOpen(true);
@@ -346,7 +462,8 @@ export const QualificationPage: React.FC = () => {
                   </button>
 
                   <button
-                    onClick={() => handleQualifier(selectedSignalement.idSignalement)}
+                    onClick={() => void handleQualifier(selectedSignalement.idSignalement)}
+                    disabled={actionLoading}
                     className="flex items-center gap-1.5 rounded-lg bg-isieco-primary px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-isieco-primary-dark transition-colors"
                   >
                     <CheckCircle2 className="h-4 w-4" />
@@ -356,7 +473,7 @@ export const QualificationPage: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="rounded-xl border border-dashed border-isieco-border p-12 text-center text-xs text-isieco-muted bg-white flex flex-col items-center justify-center min-h-[400px]">
+            <div className="ops-workflow-panel rounded-xl border border-dashed border-isieco-border p-12 text-center text-xs text-isieco-muted bg-white flex flex-col items-center justify-center min-h-[400px]">
               <Inbox className="h-8 w-8 text-gray-300 mb-2" />
               Sélectionnez une observation dans la boîte de gauche pour examiner ses détails et détecter ses doublons.
             </div>

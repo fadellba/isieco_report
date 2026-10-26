@@ -12,6 +12,7 @@ import { ReasonModal } from '../components/ui/ReasonModal.js';
 import {
   FolderKanban,
   Plus,
+  Link2,
   ArrowRightLeft,
   Share2,
   Trash2,
@@ -20,6 +21,15 @@ import {
   AlertCircle,
   FileText,
 } from 'lucide-react';
+
+type SignalementRattachable = {
+  idSignalement: string;
+  description: string;
+  dateSoumission: string;
+  latitude: number | null;
+  longitude: number | null;
+  descriptionLocalisation: string | null;
+};
 
 export const DossiersPage: React.FC = () => {
   const [dossiers, setDossiers] = useState<DossierListItem[]>([]);
@@ -30,6 +40,14 @@ export const DossiersPage: React.FC = () => {
   const [dossiersError, setDossiersError] = useState<string | null>(null);
   const [typesError, setTypesError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
+
+  // Modal de rattachement d'un signalement qualifié
+  const [rattachementModalOpen, setRattachementModalOpen] = useState(false);
+  const [signalementsRattachables, setSignalementsRattachables] = useState<SignalementRattachable[]>([]);
+  const [loadingSignalementsRattachables, setLoadingSignalementsRattachables] = useState(false);
+  const [selectedSignalementId, setSelectedSignalementId] = useState('');
+  const [rattachementError, setRattachementError] = useState<string | null>(null);
+  const [rattachementSubmitting, setRattachementSubmitting] = useState(false);
 
   // Modale de création de dossier
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -92,6 +110,50 @@ export const DossiersPage: React.FC = () => {
       setSelectedDossier(res.data);
     } catch (error) {
       setDetailError(error instanceof Error ? error.message : 'Impossible de charger le détail du dossier.');
+    }
+  };
+
+  const openRattachementModal = async () => {
+    setRattachementModalOpen(true);
+    setSignalementsRattachables([]);
+    setSelectedSignalementId('');
+    setRattachementError(null);
+    setLoadingSignalementsRattachables(true);
+    try {
+      const res = await api.get<ApiListResponse<SignalementRattachable>>('/dossiers/signalements-rattachables');
+      const signalements = res.data || [];
+      setSignalementsRattachables(signalements);
+      setSelectedSignalementId(signalements[0]?.idSignalement || '');
+    } catch (error) {
+      setRattachementError(
+        error instanceof Error ? error.message : 'Impossible de charger les signalements rattachables.'
+      );
+    } finally {
+      setLoadingSignalementsRattachables(false);
+    }
+  };
+
+  const handleRattacherSignalement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDossier || !selectedSignalementId) return;
+
+    setRattachementSubmitting(true);
+    setRattachementError(null);
+    try {
+      await api.post(`/dossiers/${selectedDossier.id_dossier}/rattacher`, {
+        idSignalement: selectedSignalementId,
+        typeRattachement: 'PRINCIPAL',
+      });
+      setRattachementModalOpen(false);
+      setSelectedSignalementId('');
+      await loadDossierDetail(selectedDossier.id_dossier);
+      await fetchDossiers();
+    } catch (error) {
+      setRattachementError(
+        error instanceof Error ? error.message : 'Impossible de rattacher ce signalement au dossier.'
+      );
+    } finally {
+      setRattachementSubmitting(false);
     }
   };
 
@@ -160,9 +222,9 @@ export const DossiersPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="ops-workflow-page p-6 space-y-6">
       {/* Title & Actions */}
-      <div className="flex items-center justify-between">
+      <div className="ops-workflow-heading flex items-center justify-between">
         <div>
           <h2 className="text-xl font-bold text-isieco-dark flex items-center gap-2">
             <FolderKanban className="h-6 w-6 text-isieco-primary" />
@@ -179,6 +241,24 @@ export const DossiersPage: React.FC = () => {
           <Plus className="h-4 w-4" />
           Nouveau Dossier
         </button>
+      </div>
+
+      <div className="ops-workflow-metrics" aria-label="Aperçu des dossiers">
+        <article className="ops-workflow-metric">
+          <span>Dossiers suivis</span>
+          <strong>{loading ? '—' : dossiers.length}</strong>
+          <small>Chantiers opérationnels</small>
+        </article>
+        <article className="ops-workflow-metric">
+          <span>Volets techniques</span>
+          <strong>{selectedDossier ? selectedDossier.volets.length : '—'}</strong>
+          <small>{selectedDossier?.reference_dossier || 'Sélectionnez un dossier'}</small>
+        </article>
+        <article className="ops-workflow-metric">
+          <span>Signalements rattachés</span>
+          <strong>{selectedDossier ? selectedDossier.signalements.length : '—'}</strong>
+          <small>Dans le dossier sélectionné</small>
+        </article>
       </div>
 
       {(dossiersError || typesError || detailError) && (
@@ -213,9 +293,9 @@ export const DossiersPage: React.FC = () => {
       )}
 
       {/* Main Workspace (Master-Detail) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[600px]">
+      <div className="ops-workflow-grid grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[600px]">
         {/* Left Dossiers List (4 cols) */}
-        <div className="lg:col-span-4 rounded-xl border border-isieco-border bg-white shadow-sm flex flex-col">
+        <div className="ops-workflow-panel lg:col-span-4 rounded-xl border border-isieco-border bg-white shadow-sm flex flex-col">
           <div className="border-b border-isieco-border p-3.5 bg-gray-50/70 flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-isieco-dark">
               Dossiers en cours ({dossiers.length})
@@ -225,7 +305,11 @@ export const DossiersPage: React.FC = () => {
           <div className="divide-y divide-isieco-border overflow-y-auto max-h-[650px] flex-1">
             {dossiers.length === 0 ? (
               <div className="p-8 text-center text-xs text-isieco-muted">
-                Aucun dossier opérationnel ouvert.
+                {loading
+                  ? 'Chargement des dossiers…'
+                  : dossiersError
+                    ? 'Les dossiers ne sont pas disponibles.'
+                    : 'Aucun dossier opérationnel ouvert.'}
               </div>
             ) : (
               dossiers.map((d) => (
@@ -263,9 +347,9 @@ export const DossiersPage: React.FC = () => {
         </div>
 
         {/* Right Dossier Detail & Volets Techniques (8 cols) */}
-        <div className="lg:col-span-8 space-y-4">
+        <div className="ops-workflow-detail lg:col-span-8 space-y-4">
           {selectedDossier ? (
-            <div className="rounded-xl border border-isieco-border bg-white p-5 shadow-sm space-y-5">
+            <div className="ops-workflow-panel rounded-xl border border-isieco-border bg-white p-5 shadow-sm space-y-5">
               {/* Header Details */}
               <div className="border-b border-isieco-border pb-4 flex items-start justify-between">
                 <div>
@@ -285,13 +369,22 @@ export const DossiersPage: React.FC = () => {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => setTransfertModalOpen(true)}
-                  className="flex items-center gap-1.5 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition-colors"
-                >
-                  <Share2 className="h-3.5 w-3.5" />
-                  Transfert Externe
-                </button>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    onClick={() => void openRattachementModal()}
+                    className="flex items-center gap-1.5 rounded-lg border border-isieco-primary/30 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 transition-colors"
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                    Rattacher un signalement
+                  </button>
+                  <button
+                    onClick={() => setTransfertModalOpen(true)}
+                    className="flex items-center gap-1.5 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition-colors"
+                  >
+                    <Share2 className="h-3.5 w-3.5" />
+                    Transfert Externe
+                  </button>
+                </div>
               </div>
 
               {/* Volets Techniques (CONTENU_DOSSIER) */}
@@ -404,9 +497,11 @@ export const DossiersPage: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="rounded-xl border border-dashed border-isieco-border p-12 text-center text-xs text-isieco-muted bg-white flex flex-col items-center justify-center min-h-[400px]">
+            <div className="ops-workflow-panel rounded-xl border border-dashed border-isieco-border p-12 text-center text-xs text-isieco-muted bg-white flex flex-col items-center justify-center min-h-[400px]">
               <FolderKanban className="h-8 w-8 text-gray-300 mb-2" />
-              Sélectionnez un dossier dans la liste pour afficher ses volets techniques et signalements rattachés.
+              {loading || (detailDossierId && !detailError)
+                ? 'Chargement du dossier sélectionné…'
+                : 'Sélectionnez un dossier dans la liste pour afficher ses volets techniques et signalements rattachés.'}
             </div>
           )}
         </div>
@@ -511,6 +606,111 @@ export const DossiersPage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {rattachementModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="rattachement-title"
+            className="w-full max-w-xl rounded-xl bg-white p-6 shadow-2xl border border-isieco-border"
+          >
+            <h3 id="rattachement-title" className="text-base font-bold text-isieco-dark border-b pb-3 mb-4">
+              Rattacher un signalement accepté
+            </h3>
+            <p className="mb-4 text-xs text-isieco-muted">
+              Seuls les signalements acceptés, non déjà rattachés et disposant d’une localisation exploitable sont proposés.
+              La localisation du dossier sera complétée si elle est absente.
+            </p>
+
+            {rattachementError && (
+              <div role="alert" className="mb-4 flex items-center gap-2 rounded-lg bg-rose-50 p-3 text-xs text-rose-700 border border-rose-200">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{rattachementError}</span>
+              </div>
+            )}
+
+            {loadingSignalementsRattachables ? (
+              <p className="py-6 text-center text-xs text-isieco-muted" role="status">
+                Chargement des signalements acceptés…
+              </p>
+            ) : signalementsRattachables.length === 0 && !rattachementError ? (
+              <p className="rounded-lg bg-gray-50 p-4 text-center text-xs text-isieco-muted">
+                Aucun signalement accepté et localisé n’est disponible pour le rattachement.
+              </p>
+            ) : (
+              <form onSubmit={handleRattacherSignalement} className="space-y-4">
+                <fieldset className="max-h-72 space-y-2 overflow-y-auto">
+                  <legend className="mb-2 text-xs font-semibold text-isieco-dark">
+                    Choisir le signalement à rattacher
+                  </legend>
+                  {signalementsRattachables.map((signalement) => (
+                    <label
+                      key={signalement.idSignalement}
+                      className={`flex cursor-pointer gap-3 rounded-lg border p-3 transition-colors ${
+                        selectedSignalementId === signalement.idSignalement
+                          ? 'border-isieco-primary bg-emerald-50'
+                          : 'border-isieco-border hover:bg-gray-50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="signalement-rattachable"
+                        value={signalement.idSignalement}
+                        checked={selectedSignalementId === signalement.idSignalement}
+                        onChange={() => setSelectedSignalementId(signalement.idSignalement)}
+                        className="mt-0.5 text-isieco-primary focus:ring-isieco-primary"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-xs font-semibold text-isieco-dark">
+                          {signalement.description}
+                        </span>
+                        <span className="mt-1 block text-[11px] text-isieco-muted">
+                          {signalement.descriptionLocalisation?.trim() ||
+                            (signalement.latitude != null && signalement.longitude != null
+                              ? `${signalement.latitude}, ${signalement.longitude}`
+                              : 'Localisation exploitable')}
+                          {' · '}
+                          {new Date(signalement.dateSoumission).toLocaleDateString('fr-SN')}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </fieldset>
+                <div className="flex justify-end gap-3 border-t border-isieco-border pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setRattachementModalOpen(false)}
+                    disabled={rattachementSubmitting}
+                    className="rounded-lg border border-isieco-border px-4 py-2 text-xs font-semibold hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Annuler
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!selectedSignalementId || rattachementSubmitting}
+                    className="rounded-lg bg-isieco-primary px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-isieco-primary-dark disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {rattachementSubmitting ? 'Rattachement…' : 'Confirmer le rattachement'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {!loadingSignalementsRattachables && signalementsRattachables.length === 0 && (
+              <div className="mt-4 flex justify-end border-t border-isieco-border pt-4">
+                <button
+                  type="button"
+                  onClick={() => setRattachementModalOpen(false)}
+                  className="rounded-lg border border-isieco-border px-4 py-2 text-xs font-semibold hover:bg-gray-50"
+                >
+                  Fermer
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

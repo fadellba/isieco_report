@@ -122,12 +122,29 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isOpen: boolean;
+  onNavigate: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onNavigate }) => {
   const { hasAnyRole } = useAuth();
 
   return (
-    <aside className="ops-sidebar w-60 shrink-0 border-r border-isieco-border bg-isieco-surface min-h-[calc(100vh-4rem)] p-3 flex flex-col justify-between">
-      <nav className="space-y-1.5">
+    <>
+      {isOpen && (
+        <button
+          type="button"
+          className="ops-sidebar__backdrop"
+          aria-label="Fermer le menu de navigation"
+          onClick={onNavigate}
+        />
+      )}
+      <aside
+        className="ops-sidebar w-60 shrink-0 border-r border-isieco-border bg-isieco-surface min-h-[calc(100vh-4rem)] p-3 flex flex-col justify-between"
+        data-open={isOpen}
+      >
+      <nav id="ops-primary-navigation" className="space-y-1.5" aria-label="Navigation principale">
         <div className="ops-sidebar__section-label px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-isieco-muted">
           <Leaf aria-hidden="true" size={13} />
           Écosystème urbain · Dakar
@@ -142,6 +159,7 @@ export const Sidebar: React.FC = () => {
               to={item.to}
               aria-label={item.label}
               title={item.label}
+              onClick={onNavigate}
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-semibold transition-all ${
                   isActive
@@ -168,6 +186,7 @@ export const Sidebar: React.FC = () => {
           <span>Signaler · Agir · Préserver</span>
         </div>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 };

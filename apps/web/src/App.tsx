@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext.js';
+import { ThemeProvider } from './context/ThemeContext.js';
 import { RoleCode } from '@isieco/shared';
 import { Header } from './components/layout/Header.js';
 import { Sidebar } from './components/layout/Sidebar.js';
@@ -22,6 +23,16 @@ import { ShieldAlert, RefreshCw } from 'lucide-react';
 
 const ProtectedLayout: React.FC = () => {
   const { user, loading } = useAuth();
+  const [navigationOpen, setNavigationOpen] = useState(false);
+
+  useEffect(() => {
+    if (!navigationOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setNavigationOpen(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [navigationOpen]);
 
   if (loading) {
     return (
@@ -40,9 +51,12 @@ const ProtectedLayout: React.FC = () => {
 
   return (
     <div className="ops-app-shell min-h-screen flex flex-col bg-isieco-bg">
-      <Header />
+      <Header
+        onToggleNavigation={() => setNavigationOpen((open) => !open)}
+        navigationOpen={navigationOpen}
+      />
       <div className="flex flex-1 min-h-0">
-        <Sidebar />
+        <Sidebar isOpen={navigationOpen} onNavigate={() => setNavigationOpen(false)} />
         <main className="ops-main min-w-0 flex-1 overflow-y-auto">
           <Outlet />
         </main>
@@ -78,9 +92,10 @@ const RequireRole: React.FC<{ roles?: RoleCode[]; children: React.ReactNode }> =
 
 export const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
           {/* Authentification publique */}
           <Route path="/login" element={<LoginPage />} />
 
@@ -231,8 +246,9 @@ export const App: React.FC = () => {
 
           {/* Fallback route */}
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };

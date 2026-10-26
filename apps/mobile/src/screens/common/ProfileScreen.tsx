@@ -1,42 +1,74 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Switch,
-  Alert,
+  ScrollView,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext.js';
 import { useOffline } from '../../context/OfflineContext.js';
-
+import { useTheme } from '../../context/ThemeContext.js';
+import { ThemePreferenceControl } from '../../components/ThemePreferenceControl.js';
 import { useOnboarding } from '../../context/OnboardingContext.js';
+import type { DesignTokens } from '@isieco/shared';
 
 export const ProfileScreen: React.FC = () => {
   const { user, logout } = useAuth();
-  const { isOnline, setIsOnline, pendingCount, syncNow, syncing } = useOffline();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const {
+    isOnline,
+    setIsOnline,
+    pendingCount,
+    legacyPendingCount,
+    queueError,
+    syncNow,
+    syncing,
+  } = useOffline();
   const { resetOnboarding } = useOnboarding();
+  const [confirmation, setConfirmation] = useState<'logout' | 'onboarding' | null>(null);
+  const [syncFeedback, setSyncFeedback] = useState<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
 
-  const handleLogout = () => {
-    Alert.alert('Déconnexion', 'Êtes-vous sûr de vouloir vous déconnecter ?', [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Se déconnecter', style: 'destructive', onPress: () => logout() },
-    ]);
+  const handleSync = async () => {
+    setSyncFeedback(null);
+    try {
+      const result = await syncNow();
+      if (result.failed > 0) {
+        setSyncFeedback({
+          type: 'error',
+          message: `${result.synced} action(s) synchronisée(s), ${result.failed} action(s) restent en attente.`,
+        });
+      } else {
+        setSyncFeedback({
+          type: 'success',
+          message: `${result.synced} action(s) synchronisée(s) avec succès.`,
+        });
+      }
+    } catch (error) {
+      setSyncFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Impossible de synchroniser les actions hors ligne.',
+      });
+    }
+  };
+
+  const handleLogout = async () => {
+    setConfirmation(null);
+    await logout();
   };
 
   const handleReplayOnboarding = () => {
-    Alert.alert(
-      'Guide d accueil',
-      'Voulez-vous relancer le tutoriel de présentation de l application ?',
-      [
-        { text: 'Annuler', style: 'cancel' },
-        { text: 'Relancer', onPress: () => resetOnboarding() },
-      ]
-    );
+    setConfirmation('onboarding');
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.screen}>
+      <ScrollView contentContainerStyle={styles.container}>
       {/* User Info Card */}
       <View style={styles.card}>
         <View style={styles.avatar}>
@@ -58,6 +90,10 @@ export const ProfileScreen: React.FC = () => {
         </View>
       </View>
 
+      <View style={[styles.card, styles.themeCard]}>
+        <ThemePreferenceControl />
+      </View>
+
       {/* Network & Offline Simulation Card */}
       <View style={styles.card}>
         <Text style={styles.sectionHeader}>Connectivité & Résilience Dakar</Text>
@@ -72,8 +108,8 @@ export const ProfileScreen: React.FC = () => {
           <Switch
             value={isOnline}
             onValueChange={setIsOnline}
-            trackColor={{ false: '#fca5a5', true: '#86efac' }}
-            thumbColor={isOnline ? '#16a34a' : '#dc2626'}
+            trackColor={{ false: colors.dangerSurface, true: colors.successSurface }}
+            thumbColor={isOnline ? colors.success : colors.danger}
           />
         </View>
 
@@ -82,10 +118,36 @@ export const ProfileScreen: React.FC = () => {
           <Text style={styles.queueVal}>{pendingCount} action(s)</Text>
         </View>
 
+        {queueError && (
+          <View accessibilityRole="alert" style={[styles.syncFeedback, styles.syncFeedbackError]}>
+            <Text style={styles.syncFeedbackText}>{queueError}</Text>
+          </View>
+        )}
+        {legacyPendingCount > 0 && (
+          <View accessibilityRole="alert" style={[styles.syncFeedback, styles.syncFeedbackError]}>
+            <Text style={styles.syncFeedbackText}>
+              {legacyPendingCount} ancienne(s) action(s) sans compte propriétaire ont été conservées
+              et ne seront pas synchronisées automatiquement. Veuillez les recréer après connexion.
+            </Text>
+          </View>
+        )}
+
+        {syncFeedback && (
+          <View
+            accessibilityRole={syncFeedback.type === 'error' ? 'alert' : 'status'}
+            style={[
+              styles.syncFeedback,
+              syncFeedback.type === 'error' ? styles.syncFeedbackError : styles.syncFeedbackSuccess,
+            ]}
+          >
+            <Text style={styles.syncFeedbackText}>{syncFeedback.message}</Text>
+          </View>
+        )}
+
         {pendingCount > 0 && isOnline && (
           <TouchableOpacity
             style={styles.syncBtn}
-            onPress={syncNow}
+            onPress={() => void handleSync()}
             disabled={syncing}
           >
             <Text style={styles.syncBtnText}>
@@ -93,6 +155,7 @@ export const ProfileScreen: React.FC = () => {
             </Text>
           </TouchableOpacity>
         )}
+
       </View>
 
       {/* Replay Onboarding Guide */}
@@ -101,33 +164,81 @@ export const ProfileScreen: React.FC = () => {
       </TouchableOpacity>
 
       {/* Logout */}
-      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+      <TouchableOpacity style={styles.logoutBtn} onPress={() => setConfirmation('logout')}>
         <Text style={styles.logoutText}>Se Déconnecter</Text>
       </TouchableOpacity>
+
+      </ScrollView>
+      {confirmation && (
+        <View style={styles.confirmationBackdrop} accessibilityViewIsModal>
+          <View style={styles.confirmationCard} accessibilityRole="alert">
+            <Text style={styles.confirmationTitle}>
+              {confirmation === 'logout' ? 'Déconnexion' : 'Guide d’accueil'}
+            </Text>
+            <Text style={styles.confirmationMessage}>
+              {confirmation === 'logout'
+                ? 'Êtes-vous sûr de vouloir vous déconnecter ?'
+                : 'Voulez-vous relancer le tutoriel de présentation de l’application ?'}
+            </Text>
+            <View style={styles.confirmationActions}>
+              <TouchableOpacity
+                style={styles.confirmationCancelBtn}
+                onPress={() => setConfirmation(null)}
+                accessibilityRole="button"
+              >
+                <Text style={styles.confirmationCancelText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.confirmationConfirmBtn}
+                onPress={() => {
+                  if (confirmation === 'logout') {
+                    void handleLogout();
+                  } else {
+                    setConfirmation(null);
+                    void resetOnboarding();
+                  }
+                }}
+                accessibilityRole="button"
+              >
+                <Text style={styles.confirmationConfirmText}>
+                  {confirmation === 'logout' ? 'Se déconnecter' : 'Relancer'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
+const createStyles = (colors: DesignTokens) => StyleSheet.create({
+  screen: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
+  },
+  container: {
+    flexGrow: 1,
+    backgroundColor: colors.background,
     padding: 16,
   },
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 18,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.border,
     alignItems: 'center',
+  },
+  themeCard: {
+    alignItems: 'stretch',
   },
   avatar: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#dcfce7',
+    backgroundColor: colors.primarySubtle,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
@@ -135,16 +246,16 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 24,
     fontWeight: '900',
-    color: '#15803d',
+    color: colors.primary,
   },
   name: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0f172a',
+    color: colors.textPrimary,
   },
   email: {
     fontSize: 12,
-    color: '#64748b',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   rolesRow: {
@@ -155,23 +266,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   roleBadge: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.surfaceRaised,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.border,
   },
   roleText: {
     fontSize: 10,
     fontFamily: 'monospace',
     fontWeight: '700',
-    color: '#334155',
+    color: colors.textSecondary,
   },
   sectionHeader: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#1e293b',
+    color: colors.textPrimary,
     textTransform: 'uppercase',
     alignSelf: 'flex-start',
     marginBottom: 12,
@@ -189,11 +300,11 @@ const styles = StyleSheet.create({
   switchLabel: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0f172a',
+    color: colors.textPrimary,
   },
   switchDesc: {
     fontSize: 11,
-    color: '#64748b',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   queueRow: {
@@ -203,19 +314,39 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: colors.border,
   },
   queueLabel: {
     fontSize: 12,
-    color: '#64748b',
+    color: colors.textSecondary,
   },
   queueVal: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#0f172a',
+    color: colors.textPrimary,
+  },
+  syncFeedback: {
+    width: '100%',
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 10,
+    marginTop: 10,
+  },
+  syncFeedbackError: {
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.danger,
+  },
+  syncFeedbackSuccess: {
+    backgroundColor: colors.primarySubtle,
+    borderColor: colors.success,
+  },
+  syncFeedbackText: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    lineHeight: 17,
   },
   syncBtn: {
-    backgroundColor: '#0f172a',
+    backgroundColor: colors.primary,
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -224,14 +355,14 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   syncBtnText: {
-    color: '#ffffff',
+    color: colors.onPrimary,
     fontSize: 12,
     fontWeight: '700',
   },
   onboardingBtn: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: colors.border,
     borderRadius: 14,
     paddingVertical: 13,
     alignItems: 'center',
@@ -239,22 +370,83 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   onboardingBtnText: {
-    color: '#0f172a',
+    color: colors.textPrimary,
     fontSize: 12,
     fontWeight: '700',
   },
   logoutBtn: {
-    backgroundColor: '#fee2e2',
+    backgroundColor: colors.surfaceRaised,
     borderWidth: 1,
-    borderColor: '#fca5a5',
+    borderColor: colors.danger,
     borderRadius: 14,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 6,
   },
   logoutText: {
-    color: '#b91c1c',
+    color: colors.danger,
     fontSize: 13,
     fontWeight: '700',
+  },
+  confirmationBackdrop: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  confirmationCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 20,
+  },
+  confirmationTitle: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  confirmationMessage: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 10,
+  },
+  confirmationActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 22,
+  },
+  confirmationCancelBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  confirmationCancelText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  confirmationConfirmBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: colors.danger,
+  },
+  confirmationConfirmText: {
+    color: colors.onPrimary,
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

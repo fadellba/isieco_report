@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import type { NotificationItem, NotificationsResponse } from '@isieco/shared';
 import { useAuth } from '../../context/AuthContext.js';
-import { Bell, Leaf, LogOut, User, ShieldCheck } from 'lucide-react';
+import { Bell, Leaf, LogOut, User, ShieldCheck, Menu, X } from 'lucide-react';
 import { api } from '../../api/client.js';
 import { Link } from 'react-router-dom';
+import { ThemePreferenceControl } from './ThemePreferenceControl.js';
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  navigationOpen: boolean;
+  onToggleNavigation: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({ navigationOpen, onToggleNavigation }) => {
   const { user, logout } = useAuth();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -51,6 +57,16 @@ export const Header: React.FC = () => {
   return (
     <header className="ops-header sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-isieco-border bg-isieco-surface px-5">
       <div className="ops-header__brand flex items-center gap-3">
+        <button
+          type="button"
+          className="ops-header__menu"
+          onClick={onToggleNavigation}
+          aria-label={navigationOpen ? 'Fermer la navigation' : 'Ouvrir la navigation'}
+          aria-controls="ops-primary-navigation"
+          aria-expanded={navigationOpen}
+        >
+          {navigationOpen ? <X size={19} /> : <Menu size={19} />}
+        </button>
         <div className="ops-header__brand-icon flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-950 text-emerald-300 ring-1 ring-emerald-800/70">
           <Leaf aria-hidden="true" className="h-5 w-5" />
         </div>
@@ -68,6 +84,7 @@ export const Header: React.FC = () => {
       </div>
 
       <div className="ops-header__controls flex items-center gap-4">
+        <ThemePreferenceControl compact />
         <div className="relative">
           <button
             onClick={() => setShowNotifications(!showNotifications)}

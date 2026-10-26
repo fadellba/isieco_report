@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -8,40 +9,62 @@ import {
   RefreshControl,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { mobileApi } from '../../services/api.js';
 import { MissionTerrainItem } from '../../types/index.js';
+import { useTheme } from '../../context/ThemeContext.js';
+import type { DesignTokens } from '@isieco/shared';
 
 export const MissionsTerrainScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [missions, setMissions] = useState<MissionTerrainItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [startingId, setStartingId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const fetchMissions = async () => {
+  const fetchMissions = useCallback(async () => {
     try {
+      setLoadError(null);
       const data = await mobileApi.interventions.getMissions();
       setMissions(data || []);
-    } catch (err: any) {
-      // offline
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Impossible de charger les missions.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    fetchMissions();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      setFeedback(null);
+      void fetchMissions();
+    }, [fetchMissions])
+  );
 
   const handleStartIntervention = async (id: string) => {
     setStartingId(id);
+    setFeedback(null);
     try {
       await mobileApi.interventions.demarrer(id);
-      Alert.alert('Intervention démarrée', 'Le début des opérations sur site a été tracé dans le journal.');
+      const message = 'Le début des opérations sur site a été tracé dans le journal.';
+      if (Platform.OS === 'web') {
+        setFeedback({ type: 'success', message });
+      } else {
+        Alert.alert('Intervention démarrée', message);
+      }
       await fetchMissions();
-    } catch (err: any) {
-      Alert.alert('Erreur', err.message || 'Impossible de démarrer l intervention.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Impossible de démarrer l intervention.';
+      if (Platform.OS === 'web') {
+        setFeedback({ type: 'error', message });
+      } else {
+        Alert.alert('Erreur', message);
+      }
     } finally {
       setStartingId(null);
     }
@@ -50,13 +73,13 @@ export const MissionsTerrainScreen: React.FC<{ navigation: any }> = ({ navigatio
   const getPriorityStyle = (prio: string) => {
     switch (prio) {
       case 'URGENTE':
-        return { bg: '#fee2e2', text: '#b91c1c' };
+        return { bg: colors.dangerSurface, text: colors.danger };
       case 'ELEVEE':
-        return { bg: '#ffedd5', text: '#c2410c' };
+        return { bg: colors.warningSurface, text: colors.warning };
       case 'MOYENNE':
-        return { bg: '#fef3c7', text: '#b45309' };
+        return { bg: colors.infoSurface, text: colors.info };
       default:
-        return { bg: '#f1f5f9', text: '#475569' };
+        return { bg: colors.surfaceRaised, text: colors.textSecondary };
     }
   };
 
@@ -69,9 +92,32 @@ export const MissionsTerrainScreen: React.FC<{ navigation: any }> = ({ navigatio
         </Text>
       </View>
 
+      {feedback && (
+        <View
+          accessibilityRole={feedback.type === 'error' ? 'alert' : 'status'}
+          style={[styles.feedback, feedback.type === 'error' ? styles.feedbackError : styles.feedbackSuccess]}
+        >
+          <Text style={styles.feedbackText}>{feedback.message}</Text>
+        </View>
+      )}
+
+      {loadError && (
+        <View accessibilityRole="alert" style={[styles.feedback, styles.feedbackError]}>
+          <Text style={styles.feedbackText}>{loadError}</Text>
+          <TouchableOpacity
+            onPress={() => {
+              setLoading(true);
+              void fetchMissions();
+            }}
+          >
+            <Text style={styles.retryText}>Réessayer</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#16a34a" />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Chargement des missions...</Text>
         </View>
       ) : (
@@ -83,9 +129,9 @@ export const MissionsTerrainScreen: React.FC<{ navigation: any }> = ({ navigatio
               refreshing={refreshing}
               onRefresh={() => {
                 setRefreshing(true);
-                fetchMissions();
+                void fetchMissions();
               }}
-              colors={['#16a34a']}
+              colors={[colors.primary]}
             />
           }
           contentContainerStyle={styles.list}
@@ -142,7 +188,7 @@ export const MissionsTerrainScreen: React.FC<{ navigation: any }> = ({ navigatio
                       disabled={startingId === item.idIntervention}
                     >
                       {startingId === item.idIntervention ? (
-                        <ActivityIndicator color="#ffffff" size="small" />
+                        <ActivityIndicator color={colors.onPrimary} size="small" />
                       ) : (
                         <Text style={styles.startBtnText}>▶ Démarrer sur site</Text>
                       )}
@@ -175,23 +221,48 @@ export const MissionsTerrainScreen: React.FC<{ navigation: any }> = ({ navigatio
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: DesignTokens) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
     padding: 16,
   },
   header: {
     marginBottom: 14,
   },
+  feedback: {
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+  },
+  feedbackError: {
+    backgroundColor: colors.dangerSurface,
+    borderColor: colors.danger,
+  },
+  feedbackSuccess: {
+    backgroundColor: colors.successSurface,
+    borderColor: colors.success,
+  },
+  feedbackText: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  retryText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 6,
+  },
   title: {
     fontSize: 20,
     fontWeight: '900',
-    color: '#0f172a',
+    color: colors.textPrimary,
   },
   subtitle: {
     fontSize: 12,
-    color: '#64748b',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   center: {
@@ -202,18 +273,18 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 12,
-    color: '#64748b',
+    color: colors.textSecondary,
   },
   list: {
     gap: 12,
     paddingBottom: 20,
   },
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOpacity: 0.04,
     shadowRadius: 6,
@@ -228,12 +299,12 @@ const styles = StyleSheet.create({
   dossierRef: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#0f172a',
+    color: colors.textPrimary,
     fontFamily: 'monospace',
   },
   equipeName: {
     fontSize: 11,
-    color: '#64748b',
+    color: colors.textSecondary,
     marginTop: 1,
   },
   prioBadge: {
@@ -246,39 +317,39 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   voletBox: {
-    backgroundColor: '#eff6ff',
+    backgroundColor: colors.infoSurface,
     padding: 8,
     borderRadius: 8,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#dbeafe',
+    borderColor: colors.border,
   },
   voletLabel: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#1d4ed8',
+    color: colors.info,
   },
   voletVal: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#1e3a8a',
+    color: colors.info,
     marginTop: 1,
   },
   desc: {
     fontSize: 12,
-    color: '#334155',
+    color: colors.textSecondary,
     lineHeight: 17,
     marginBottom: 8,
   },
   locRow: {
     borderTopWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: colors.border,
     paddingTop: 8,
     marginBottom: 12,
   },
   locText: {
     fontSize: 11,
-    color: '#64748b',
+    color: colors.textSecondary,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -286,39 +357,39 @@ const styles = StyleSheet.create({
   },
   startBtn: {
     flex: 1,
-    backgroundColor: '#2563eb',
+    backgroundColor: colors.primary,
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
   },
   startBtnText: {
-    color: '#ffffff',
+    color: colors.onPrimary,
     fontSize: 11,
     fontWeight: '700',
   },
   reportBtn: {
     flex: 1,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.surfaceRaised,
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: colors.border,
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
   },
   reportBtnPrimary: {
-    backgroundColor: '#16a34a',
-    borderColor: '#15803d',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   reportBtnText: {
-    color: '#334155',
+    color: colors.textSecondary,
     fontSize: 11,
     fontWeight: '700',
   },
   reportBtnTextPrimary: {
-    color: '#ffffff',
+    color: colors.onPrimary,
   },
   donePill: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: colors.successSurface,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
@@ -326,7 +397,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   doneText: {
-    color: '#15803d',
+    color: colors.success,
     fontSize: 11,
     fontWeight: '800',
   },
@@ -341,11 +412,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#0f172a',
+    color: colors.textPrimary,
   },
   emptySubtitle: {
     fontSize: 12,
-    color: '#64748b',
+    color: colors.textSecondary,
     marginTop: 4,
   },
 });

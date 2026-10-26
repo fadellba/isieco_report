@@ -1,6 +1,12 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { FastifyInstance } from 'fastify';
-import { createTestApp, cleanDatabase, loginAs, TEST_PERSONAS } from './helpers.js';
+import {
+  createTestApp,
+  cleanDatabase,
+  failBusinessEventForTest,
+  loginAs,
+  TEST_PERSONAS,
+} from './helpers.js';
 import { getDb } from '../src/db/index.js';
 
 describe('Profil utilisateur et sécurité du compte', () => {
@@ -72,6 +78,70 @@ describe('Profil utilisateur et sécurité du compte', () => {
       prenom: 'Aminata',
       telephone: '+221770000099',
     });
+  });
+
+  it('annule la modification du profil si sa trace métier échoue', async () => {
+    const admin = await loginAs(app, TEST_PERSONAS.ADMIN.email);
+    const removeFailure = await failBusinessEventForTest('COMPTE_MODIFIE');
+    try {
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/api/auth/me',
+        headers: admin.headers,
+        payload: {
+          nom: 'Nom qui ne doit pas persister',
+          prenom: 'Profil annulé',
+          telephone: '+221770000098',
+        },
+      });
+      expect(response.statusCode).toBe(500);
+    } finally {
+      await removeFailure();
+    }
+
+    const persisted = await getDb().queryOne<{
+      nom: string;
+      prenom: string | null;
+      telephone: string | null;
+    }>(
+      'SELECT nom, prenom, telephone FROM utilisateur WHERE id_utilisateur = $1',
+      [TEST_PERSONAS.ADMIN.id],
+    );
+    expect(persisted).toMatchObject({
+      nom: originalAdmin.nom,
+      prenom: originalAdmin.prenom,
+      telephone: originalAdmin.telephone,
+    });
+  });
+
+  it('annule le changement de mot de passe et la révocation des sessions si l’audit échoue', async () => {
+    const currentSession = await loginAs(app, TEST_PERSONAS.ADMIN.email);
+    const otherSession = await loginAs(app, TEST_PERSONAS.ADMIN.email);
+    const removeFailure = await failBusinessEventForTest('COMPTE_MODIFIE');
+    try {
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/api/auth/password',
+        headers: currentSession.headers,
+        payload: {
+          currentPassword: TEST_PERSONAS.ADMIN.password,
+          newPassword: 'TransactionAnnulee2026!',
+        },
+      });
+      expect(response.statusCode).toBe(500);
+    } finally {
+      await removeFailure();
+    }
+
+    const stillAuthenticated = await app.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: otherSession.headers,
+    });
+    expect(stillAuthenticated.statusCode).toBe(200);
+    expect((await loginAs(app, TEST_PERSONAS.ADMIN.email)).statusCode).toBe(200);
+    expect((await loginAs(app, TEST_PERSONAS.ADMIN.email, 'TransactionAnnulee2026!')).statusCode)
+      .toBe(401);
   });
 
   it('vérifie le mot de passe courant et ferme les autres sessions après le changement', async () => {

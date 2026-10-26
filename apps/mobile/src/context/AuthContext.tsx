@@ -7,6 +7,7 @@ interface AuthContextValue {
   user: MobileUser | null;
   token: string | null;
   loading: boolean;
+  initializationError: string | null;
   isCitoyen: boolean;
   isTerrainAgent: boolean;
   login: (email: string, mdp: string) => Promise<void>;
@@ -20,6 +21,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<MobileUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initializationError, setInitializationError] = useState<string | null>(null);
 
   useEffect(() => {
     loadStoredAuth()
@@ -27,15 +29,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setToken(savedToken);
         setUser(savedUser);
       })
+      .catch(() => {
+        setToken(null);
+        setUser(null);
+        setInitializationError('Impossible de lire la session sécurisée. Reconnectez-vous.');
+      })
       .finally(() => setLoading(false));
   }, []);
 
   const login = async (email: string, mdp: string) => {
     setLoading(true);
+    setInitializationError(null);
     try {
       const res = await mobileApi.auth.login(email, mdp);
       setToken(res.token);
-      setUser(res.utilisateur);
+      setUser(res.user);
     } finally {
       setLoading(false);
     }
@@ -45,9 +53,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(true);
     try {
       await mobileApi.auth.logout();
+    } finally {
       setUser(null);
       setToken(null);
-    } finally {
       setLoading(false);
     }
   };
@@ -67,6 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         token,
         loading,
+        initializationError,
         isCitoyen,
         isTerrainAgent,
         login,

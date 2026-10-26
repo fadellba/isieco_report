@@ -1,8 +1,9 @@
 import { FastifyPluginAsync } from 'fastify';
-import { getDb } from '../../db/index.js';
 import { RoleCode } from '@isieco/shared';
+import { getMapPoints, getSanitationIndicators } from '../../application/use-cases/carte-stats.js';
 
 export const carteStatsRoutes: FastifyPluginAsync = async (fastify) => {
+  const repository = fastify.dependencies.carteStats;
   const allowedOfficials = [
     RoleCode.QUALIFICATION,
     RoleCode.TRAITEMENT,
@@ -67,97 +68,7 @@ export const carteStatsRoutes: FastifyPluginAsync = async (fastify) => {
         },
       },
     },
-  }, async () => {
-    const db = getDb();
-
-    // 1. Objets géolocalisés (Dossiers, Signalements et Interventions)
-    const points = await db.query(
-      `SELECT d.id_dossier as "id",
-              'DOSSIER' as "typeObjet",
-              d.reference_dossier as "reference",
-              d.description_synthese as "description",
-              d.priorite,
-              d.statut_dossier as "statut",
-              d.latitude,
-              d.longitude,
-              d.date_creation_dossier as "dateCreation",
-              NULL::uuid as "idAffectation",
-              NULL::text as "referenceDossier",
-              NULL::text as "nomEquipe",
-              NULL::timestamptz as "dateDebut",
-              NULL::timestamptz as "dateFin",
-              NULL::text as "resultatIntervention"
-       FROM dossier_traitement d
-       WHERE d.latitude IS NOT NULL AND d.longitude IS NOT NULL
-       UNION ALL
-       SELECT s.id_signalement as "id",
-              'SIGNALEMENT' as "typeObjet",
-              CONCAT(
-                'SIG-',
-                SUBSTRING(s.id_signalement::text, 1, 8),
-                '-',
-                SUBSTRING(s.id_signalement::text, 33, 4)
-              ) as "reference",
-              s.description,
-              'MOYENNE' as "priorite",
-              s.statut_signalement as "statut",
-              s.latitude,
-              s.longitude,
-              s.date_soumission as "dateCreation",
-              NULL::uuid as "idAffectation",
-              NULL::text as "referenceDossier",
-              NULL::text as "nomEquipe",
-              NULL::timestamptz as "dateDebut",
-              NULL::timestamptz as "dateFin",
-              NULL::text as "resultatIntervention"
-       FROM signalement s
-       WHERE s.latitude IS NOT NULL AND s.longitude IS NOT NULL
-         AND s.statut_signalement NOT IN ('RATTACHE', 'REJETE')`
-      + ` UNION ALL
-       SELECT i.id_intervention as "id",
-              'INTERVENTION' as "typeObjet",
-              CONCAT('INT-', SUBSTRING(i.id_intervention::text, 1, 8)) as "reference",
-              d.description_synthese as "description",
-              d.priorite,
-              i.statut_intervention as "statut",
-              d.latitude,
-              d.longitude,
-              COALESCE(i.date_heure_debut, a.date_heure_affectation) as "dateCreation",
-              a.id_affectation as "idAffectation",
-              d.reference_dossier as "referenceDossier",
-              e.nom_equipe as "nomEquipe",
-              i.date_heure_debut as "dateDebut",
-              i.date_heure_fin as "dateFin",
-              i.resultat_intervention as "resultatIntervention"
-       FROM intervention i
-       JOIN affectation a ON a.id_affectation = i.id_affectation
-       JOIN dossier_traitement d ON d.id_dossier = a.id_dossier
-       JOIN equipe e ON e.id_equipe = a.id_equipe
-       WHERE d.latitude IS NOT NULL AND d.longitude IS NOT NULL
-         AND i.statut_intervention <> 'ANNULEE'
-         AND a.etat_affectation NOT IN ('REMPLACEE', 'ANNULEE')`
-    );
-
-    // 2. Objets sans coordonnées GPS exploitables (Liste d'attente repère textuel - Test T37)
-    const sansCoordonnees = await db.query(
-      `SELECT s.id_signalement as "idSignalement",
-              s.description,
-              s.description_localisation as "descriptionLocalisation",
-              s.statut_signalement as "statutSignalement",
-              s.date_soumission as "dateSoumission"
-       FROM signalement s
-       WHERE s.latitude IS NULL OR s.longitude IS NULL
-       ORDER BY s.date_soumission ASC`
-    );
-
-    return {
-      success: true,
-      pointsGeolocalises: points,
-      totalPoints: points.length,
-      sansCoordonnees,
-      totalSansCoordonnees: sansCoordonnees.length,
-    };
-  });
+  }, async () => getMapPoints(repository));
 
   // Indicateurs statistiques de salubrité (UC11 / Test T38 / RG58 / RG59)
   fastify.get('/statistiques/indicateurs', {
@@ -188,6 +99,15 @@ export const carteStatsRoutes: FastifyPluginAsync = async (fastify) => {
             definitions: {
               type: 'object',
               properties: {
+                periode: { type: 'string' },
+                observationsRecues: { type: 'string' },
+                dossiersCrees: { type: 'string' },
+                dossiersCloturesResolus: { type: 'string' },
+                tauxResolutionGlobalPct: { type: 'string' },
+                affectationsAttribuees: { type: 'string' },
+                interventionsTerminees: { type: 'string' },
+                resolutionsVerifieesConformes: { type: 'string' },
+                reouverturesTracees: { type: 'string' },
                 rg58: { type: 'string' },
                 rg59: { type: 'string' },
               },
@@ -196,44 +116,5 @@ export const carteStatsRoutes: FastifyPluginAsync = async (fastify) => {
         },
       },
     },
-  }, async () => {
-    const db = getDb();
-
-    // Règle RG58 / RG59 / Test T38 : Comptage séparé et étanche
-    const [obs] = await db.query<{ count: string | number }>(`SELECT count(*) as count FROM signalement`);
-    const [dossiers] = await db.query<{ count: string | number }>(`SELECT count(*) as count FROM dossier_traitement`);
-    const [dossiersClos] = await db.query<{ count: string | number }>(`SELECT count(*) as count FROM dossier_traitement WHERE statut_dossier = 'CLOS_RESOLUTION_CONFIRMEE'`);
-    const [affectations] = await db.query<{ count: string | number }>(`SELECT count(*) as count FROM affectation`);
-    const [interventions] = await db.query<{ count: string | number }>(`SELECT count(*) as count FROM intervention WHERE statut_intervention = 'TERMINEE'`);
-    const [resolutions] = await db.query<{ count: string | number }>(`SELECT count(*) as count FROM verification_resolution WHERE resultat_verification = 'CONFORME_RESOLU'`);
-    const [reouvertures] = await db.query<{ count: string | number }>(`SELECT count(*) as count FROM evenement_metier WHERE type_evenement = 'DOSSIER_REOUVERT'`);
-
-    const nbObs = Number(obs?.count || 0);
-    const nbDossiers = Number(dossiers?.count || 0);
-    const nbClos = Number(dossiersClos?.count || 0);
-    const nbAffectations = Number(affectations?.count || 0);
-    const nbInterventions = Number(interventions?.count || 0);
-    const nbResolutions = Number(resolutions?.count || 0);
-    const nbReouvertures = Number(reouvertures?.count || 0);
-
-    const tauxResolutionPct = nbDossiers > 0 ? Math.round((nbClos / nbDossiers) * 100) : 0;
-
-    return {
-      success: true,
-      indicateurs: {
-        observationsRecues: nbObs,
-        dossiersCrees: nbDossiers,
-        dossiersCloturesResolus: nbClos,
-        tauxResolutionGlobalPct: tauxResolutionPct,
-        affectationsAttribuees: nbAffectations,
-        interventionsTerminees: nbInterventions,
-        resolutionsVerifieesConformes: nbResolutions,
-        reouverturesTracees: nbReouvertures,
-      },
-      definitions: {
-        rg58: 'Observations reçues et dossiers créés comptés séparément.',
-        rg59: 'Résolutions vérifiées et réouvertures comptabilisées comme grandeurs distinctes.',
-      },
-    };
-  });
+  }, async () => getSanitationIndicators(repository));
 };

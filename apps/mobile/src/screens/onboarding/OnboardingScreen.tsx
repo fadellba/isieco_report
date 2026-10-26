@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Logo } from '../../components/Logo.js';
 import { useOnboarding } from '../../context/OnboardingContext.js';
+import { useTheme } from '../../context/ThemeContext.js';
+import type { DesignTokens } from '@isieco/shared';
 
 interface Slide {
   id: string;
@@ -62,6 +64,8 @@ const SLIDES: Slide[] = [
 export const OnboardingScreen: React.FC<{ onComplete?: () => void }> = ({ onComplete }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const { completeOnboarding } = useOnboarding();
+  const { colors, theme } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const handleNext = async () => {
     if (currentIndex < SLIDES.length - 1) {
@@ -89,7 +93,7 @@ export const OnboardingScreen: React.FC<{ onComplete?: () => void }> = ({ onComp
     <SafeAreaView style={styles.container}>
       {/* Top Header: Logo & Skip button */}
       <View style={styles.topBar}>
-        <Logo size="small" showSubtitle={false} />
+        <Logo size="small" showSubtitle={false} tone={theme === 'dark' ? 'dark' : 'light'} />
         <TouchableOpacity style={styles.skipBtn} onPress={handleFinish}>
           <Text style={styles.skipText}>Passer</Text>
         </TouchableOpacity>
@@ -156,10 +160,10 @@ export const OnboardingScreen: React.FC<{ onComplete?: () => void }> = ({ onComp
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: DesignTokens) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.background,
     justifyContent: 'space-between',
   },
   topBar: {
@@ -174,12 +178,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.surfaceRaised,
   },
   skipText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#64748b',
+    color: colors.textSecondary,
   },
   slideCard: {
     flex: 1,
@@ -188,31 +192,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
   },
   badgePill: {
-    backgroundColor: '#dcfce7',
+    backgroundColor: colors.primarySubtle,
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 20,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: '#bbf7d0',
+    borderColor: colors.border,
   },
   badgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#15803d',
+    color: colors.primary,
     letterSpacing: 0.8,
   },
   illustrationCircle: {
     width: 130,
     height: 130,
     borderRadius: 65,
-    backgroundColor: '#f0fdf4',
+    backgroundColor: colors.primarySubtle,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 28,
     borderWidth: 4,
-    borderColor: '#dcfce7',
-    shadowColor: '#16a34a',
+    borderColor: colors.border,
+    shadowColor: colors.primary,
     shadowOpacity: 0.15,
     shadowRadius: 16,
     elevation: 3,
@@ -223,30 +227,30 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '900',
-    color: '#0f172a',
+    color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: 12,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 13,
-    color: '#475569',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 20,
   },
   highlightBox: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.surface,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.border,
   },
   highlightText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#0f172a',
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   bottomBar: {
@@ -264,11 +268,11 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: colors.border,
   },
   dotActive: {
     width: 24,
-    backgroundColor: '#16a34a',
+    backgroundColor: colors.primary,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -280,30 +284,30 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.surfaceRaised,
   },
   prevBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#475569',
+    color: colors.textSecondary,
   },
   nextBtn: {
     flex: 2,
-    backgroundColor: '#16a34a',
+    backgroundColor: colors.primary,
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',
-    shadowColor: '#16a34a',
+    shadowColor: colors.primary,
     shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 3,
   },
   finishBtn: {
-    backgroundColor: '#0f172a',
-    shadowColor: '#0f172a',
+    backgroundColor: colors.primary,
+    shadowColor: colors.primary,
   },
   nextBtnText: {
-    color: '#ffffff',
+    color: colors.onPrimary,
     fontSize: 14,
     fontWeight: '800',
   },

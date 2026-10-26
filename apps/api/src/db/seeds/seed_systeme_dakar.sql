@@ -105,7 +105,7 @@ ON CONFLICT DO NOTHING;
 
 -- 6. Appartenance d'agents aux équipes
 INSERT INTO appartenance_equipe (id_utilisateur, id_equipe, date_debut, fonction) VALUES
-('00000000-0000-0000-0000-000000000005', '20000000-0000-0000-0000-000000000001', '2026-01-01 08:00:00+00', 'CHEF_EQUIPE_TERRAIN')
+('00000000-0000-0000-0000-000000000005', '20000000-0000-0000-0000-000000000001', '2026-01-01 08:00:00+00', 'CHEF_EQUIPE')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO appartenance_equipe (id_utilisateur, id_equipe, date_debut, fonction) VALUES

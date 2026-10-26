@@ -3,6 +3,7 @@ import { FastifyInstance } from 'fastify';
 import {
   createTestApp,
   cleanDatabase,
+  failTableWriteForTest,
   loginAs,
   TEST_PERSONAS,
   TEST_TYPES_DECHETS,
@@ -10,6 +11,7 @@ import {
 } from './helpers.js';
 import { EtatAffectation } from '@isieco/shared';
 import { getDb } from '../src/db/index.js';
+import crypto from 'node:crypto';
 
 describe('Jalon M4 (Tranche 3) — Référentiels, Compétences & Affectation par Volet', () => {
   let app: FastifyInstance;
@@ -69,6 +71,81 @@ describe('Jalon M4 (Tranche 3) — Référentiels, Compétences & Affectation pa
 
     expect(res.statusCode).toBe(400);
     expect(res.json().error.message).toMatch(/absent du contenu de ce dossier/i);
+  });
+
+  it('annule intégralement une réaffectation si la nouvelle intervention ne peut pas être créée', async () => {
+    const traitement = await loginAs(app, TEST_PERSONAS.TRAITEMENT.email);
+    const affectation = await loginAs(app, TEST_PERSONAS.AFFECTATION.email);
+    const idDossier = await createTestDossier(traitement.headers);
+    const initial = await app.inject({
+      method: 'POST',
+      url: '/api/affectations',
+      headers: affectation.headers,
+      payload: {
+        idDossier,
+        idTypeDechet: TEST_TYPES_DECHETS.PLASTIQUE,
+        idEquipe: TEST_EQUIPES.PLASTIQUE_PLATEAU.id,
+        idCompetenceEquipe: TEST_EQUIPES.PLASTIQUE_PLATEAU.competencePlastique,
+        motif: 'Première affectation avant remplacement.',
+      },
+    });
+    expect(initial.statusCode).toBe(201);
+    const oldAssignmentId = initial.json().idAffectation as string;
+    const removeFailure = await failTableWriteForTest('intervention');
+
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/api/affectations/${oldAssignmentId}/reaffecter`,
+        headers: affectation.headers,
+        payload: {
+          nouvelleEquipeId: TEST_EQUIPES.PLASTIQUE_PLATEAU.id,
+          nouvelleCompetenceId: TEST_EQUIPES.PLASTIQUE_PLATEAU.competencePlastique,
+          motif: 'Remplacement transactionnel dont la création échouera.',
+        },
+      });
+      expect(response.statusCode).toBe(500);
+    } finally {
+      await removeFailure();
+    }
+
+    const state = await getDb().queryOne<{
+      old_state: string;
+      old_ended: boolean;
+      assignments: string;
+      interventions: string;
+      replacement_events: string;
+      content_state: string;
+    }>(
+      `SELECT
+         a.etat_affectation AS old_state,
+         a.date_fin_affectation IS NOT NULL AS old_ended,
+         (SELECT COUNT(*)::text FROM affectation
+          WHERE id_dossier = $1 AND id_type_dechet = $2) AS assignments,
+         (SELECT COUNT(*)::text FROM intervention i
+          JOIN affectation related ON related.id_affectation = i.id_affectation
+          WHERE related.id_dossier = $1 AND related.id_type_dechet = $2) AS interventions,
+         (SELECT COUNT(*)::text FROM evenement_metier e
+          WHERE e.type_evenement = 'AFFECTATION_REMPLACEE'
+            AND e.id_affectation_cible IN (
+              SELECT id_affectation FROM affectation
+              WHERE id_dossier = $1 AND id_type_dechet = $2
+            )) AS replacement_events,
+         c.etat_prise_en_charge AS content_state
+       FROM affectation a
+       JOIN contenu_dossier c
+         ON c.id_dossier = a.id_dossier AND c.id_type_dechet = a.id_type_dechet
+       WHERE a.id_affectation = $3`,
+      [idDossier, TEST_TYPES_DECHETS.PLASTIQUE, oldAssignmentId],
+    );
+    expect(state).toEqual({
+      old_state: EtatAffectation.ACTIVE,
+      old_ended: false,
+      assignments: '1',
+      interventions: '1',
+      replacement_events: '0',
+      content_state: 'AFFECTEE',
+    });
   });
 
   // --------------------------------------------------------------------------
@@ -242,6 +319,156 @@ describe('Jalon M4 (Tranche 3) — Référentiels, Compétences & Affectation pa
     });
     expect(aff2.statusCode).toBe(400);
     expect(aff2.json().error.message).toMatch(/affectation active existe déjà/i);
+  });
+
+  it('sérialise deux affectations concurrentes du même volet sans créer de doublon', async () => {
+    const traitement = await loginAs(app, TEST_PERSONAS.TRAITEMENT.email);
+    const affectation = await loginAs(app, TEST_PERSONAS.AFFECTATION.email);
+    const idDossier = await createTestDossier(traitement.headers);
+    const payload = {
+      idDossier,
+      idTypeDechet: TEST_TYPES_DECHETS.PLASTIQUE,
+      idEquipe: TEST_EQUIPES.PLASTIQUE_PLATEAU.id,
+      idCompetenceEquipe: TEST_EQUIPES.PLASTIQUE_PLATEAU.competencePlastique,
+    };
+
+    const responses = await Promise.all([
+      app.inject({
+        method: 'POST',
+        url: '/api/affectations',
+        headers: affectation.headers,
+        payload: { ...payload, motif: 'Première requête simultanée' },
+      }),
+      app.inject({
+        method: 'POST',
+        url: '/api/affectations',
+        headers: affectation.headers,
+        payload: { ...payload, motif: 'Seconde requête simultanée' },
+      }),
+    ]);
+
+    expect(responses.map((response) => response.statusCode).sort()).toEqual([201, 400]);
+    const persisted = await getDb().queryOne<{ affectations: string; interventions: string }>(
+      `SELECT
+         (SELECT COUNT(*)::text FROM affectation
+          WHERE id_dossier = $1 AND id_type_dechet = $2 AND date_fin_affectation IS NULL) AS affectations,
+         (SELECT COUNT(*)::text FROM intervention i
+          JOIN affectation a ON a.id_affectation = i.id_affectation
+          WHERE a.id_dossier = $1 AND a.id_type_dechet = $2) AS interventions`,
+      [idDossier, TEST_TYPES_DECHETS.PLASTIQUE],
+    );
+    expect(persisted).toEqual({ affectations: '1', interventions: '1' });
+  });
+
+  it('rend idempotentes deux requêtes concurrentes portant la même référence', async () => {
+    const traitement = await loginAs(app, TEST_PERSONAS.TRAITEMENT.email);
+    const affectation = await loginAs(app, TEST_PERSONAS.AFFECTATION.email);
+    const idDossier = await createTestDossier(traitement.headers);
+    const referenceOperationUnique = `OP-CONCURRENT-${crypto.randomUUID()}`;
+    const payload = {
+      idDossier,
+      idTypeDechet: TEST_TYPES_DECHETS.PLASTIQUE,
+      idEquipe: TEST_EQUIPES.PLASTIQUE_PLATEAU.id,
+      idCompetenceEquipe: TEST_EQUIPES.PLASTIQUE_PLATEAU.competencePlastique,
+      referenceOperationUnique,
+    };
+
+    const responses = await Promise.all([
+      app.inject({ method: 'POST', url: '/api/affectations', headers: affectation.headers, payload }),
+      app.inject({ method: 'POST', url: '/api/affectations', headers: affectation.headers, payload }),
+    ]);
+
+    expect(responses.map((response) => response.statusCode).sort()).toEqual([200, 201]);
+    expect(responses.map((response) => response.json().idAffectation).filter(Boolean))
+      .toEqual([responses[0].json().idAffectation, responses[0].json().idAffectation]);
+    expect(responses.filter((response) => response.json().idempotent === true)).toHaveLength(1);
+    const counts = await getDb().queryOne<{
+      affectations: string;
+      interventions: string;
+      events: string;
+    }>(
+      `SELECT
+         (SELECT COUNT(*)::text FROM affectation
+          WHERE reference_operation_unique = $1) AS affectations,
+         (SELECT COUNT(*)::text FROM intervention i
+          JOIN affectation a ON a.id_affectation = i.id_affectation
+          WHERE a.reference_operation_unique = $1) AS interventions,
+         (SELECT COUNT(*)::text FROM evenement_metier
+          WHERE reference_operation_unique = $1) AS events`,
+      [referenceOperationUnique],
+    );
+    expect(counts).toEqual({ affectations: '1', interventions: '1', events: '1' });
+  });
+
+  it('annule toutes les écritures si la journalisation échoue après les premières écritures métier', async () => {
+    const db = getDb();
+    const traitement = await loginAs(app, TEST_PERSONAS.TRAITEMENT.email);
+    const affectation = await loginAs(app, TEST_PERSONAS.AFFECTATION.email);
+    const idDossier = await createTestDossier(traitement.headers);
+
+    await db.execute(`
+      CREATE FUNCTION test_fail_affectation_event() RETURNS TRIGGER
+      LANGUAGE plpgsql AS $$
+      BEGIN
+        IF NEW.type_evenement = 'AFFECTATION_CREEE' THEN
+          RAISE EXCEPTION 'Échec injecté de journalisation pour le test transactionnel';
+        END IF;
+        RETURN NEW;
+      END;
+      $$;
+      CREATE TRIGGER test_fail_affectation_event_trigger
+      BEFORE INSERT ON evenement_metier
+      FOR EACH ROW EXECUTE FUNCTION test_fail_affectation_event();
+    `);
+
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/affectations',
+        headers: affectation.headers,
+        payload: {
+          idDossier,
+          idTypeDechet: TEST_TYPES_DECHETS.PLASTIQUE,
+          idEquipe: TEST_EQUIPES.PLASTIQUE_PLATEAU.id,
+          idCompetenceEquipe: TEST_EQUIPES.PLASTIQUE_PLATEAU.competencePlastique,
+          motif: 'Affectation dont la trace échouera',
+        },
+      });
+
+      expect(response.statusCode).toBe(500);
+
+      const state = await db.queryOne<{
+        affectations: string;
+        interventions: string;
+        events: string;
+        etat_prise_en_charge: string;
+      }>(
+        `SELECT
+           (SELECT COUNT(*)::text FROM affectation WHERE id_dossier = $1) AS affectations,
+           (SELECT COUNT(*)::text FROM intervention i
+            JOIN affectation a ON a.id_affectation = i.id_affectation
+            WHERE a.id_dossier = $1) AS interventions,
+           (SELECT COUNT(*)::text FROM evenement_metier
+            WHERE id_affectation_cible IN (
+              SELECT id_affectation FROM affectation WHERE id_dossier = $1
+            )) AS events,
+           etat_prise_en_charge
+         FROM contenu_dossier
+         WHERE id_dossier = $1 AND id_type_dechet = $2`,
+        [idDossier, TEST_TYPES_DECHETS.PLASTIQUE],
+      );
+      expect(state).toEqual({
+        affectations: '0',
+        interventions: '0',
+        events: '0',
+        etat_prise_en_charge: 'A_AFFECTER',
+      });
+    } finally {
+      await db.execute(`
+        DROP TRIGGER test_fail_affectation_event_trigger ON evenement_metier;
+        DROP FUNCTION test_fail_affectation_event();
+      `);
+    }
   });
 
   // --------------------------------------------------------------------------

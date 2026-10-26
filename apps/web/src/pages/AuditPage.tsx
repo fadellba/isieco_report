@@ -18,7 +18,7 @@ import { ReasonModal } from '../components/ui/ReasonModal.js';
 interface AuditEvent {
   idEvenement: string;
   typeEvenement: string;
-  dateEvenement: string;
+  dateEvenement: string | null;
   dateEnregistrement: string;
   origine: string;
   idActeur: string;
@@ -99,9 +99,9 @@ export const AuditPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="ops-workflow-page p-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="ops-workflow-heading flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-isieco-dark tracking-tight flex items-center gap-2">
             <ScrollText className="h-7 w-7 text-isieco-primary" />
@@ -161,7 +161,7 @@ export const AuditPage: React.FC = () => {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-700">
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs font-medium text-red-700" role="alert">
           {error}
         </div>
       )}
@@ -189,6 +189,13 @@ export const AuditPage: React.FC = () => {
                 </tr>
               ) : (
                 events.map((ev) => {
+                  const eventDate = new Date(ev.dateEvenement || ev.dateEnregistrement);
+                  const formattedEventDate = Number.isNaN(eventDate.getTime())
+                    ? 'Date indisponible'
+                    : eventDate.toLocaleString('fr-SN', {
+                        dateStyle: 'short',
+                        timeStyle: 'medium',
+                      });
                   const targetLabel = ev.idDossierCible
                     ? `Dossier: ${ev.idDossierCible.substring(0, 8)}...`
                     : ev.idSignalementCible
@@ -205,10 +212,7 @@ export const AuditPage: React.FC = () => {
                     <tr key={ev.idEvenement} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3 px-4 text-slate-600 whitespace-nowrap">
                         <div className="font-semibold text-slate-900">
-                          {new Date(ev.dateEvenement).toLocaleString('fr-SN', {
-                            dateStyle: 'short',
-                            timeStyle: 'medium',
-                          })}
+                          {formattedEventDate}
                         </div>
                         <div className="text-[10px] text-slate-400 font-mono">
                           UUID: {ev.idEvenement.substring(0, 8)}...
@@ -405,4 +409,3 @@ export const AuditPage: React.FC = () => {
     </div>
   );
 };
-

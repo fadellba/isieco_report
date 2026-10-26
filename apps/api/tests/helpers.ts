@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import { buildApp } from '../src/app.js';
 import { getDb } from '../src/db/index.js';
 import { ClientType } from '@isieco/shared';
@@ -14,6 +15,7 @@ export const TEST_PERSONAS = {
   VERIFICATION: { email: 'verification@isieco.sn', password: 'Password@123', id: '00000000-0000-0000-0000-000000000006' },
   ADMIN: { email: 'admin@isieco.sn', password: 'Password@123', id: '00000000-0000-0000-0000-000000000007' },
   DECISION: { email: 'decision@isieco.sn', password: 'Password@123', id: '00000000-0000-0000-0000-000000000008' },
+  OPERATIONS: { email: 'operations@isieco.sn', password: 'Password@123', id: '00000000-0000-0000-0000-000000000011' },
 };
 
 export const TEST_TYPES_DECHETS = {
@@ -125,3 +127,72 @@ export async function loginAs(
   };
 }
 
+export async function failBusinessEventForTest(typeEvenement: string): Promise<() => Promise<void>> {
+  if (!/^[A-Z_]+$/.test(typeEvenement)) {
+    throw new Error(`Type d’événement de test invalide : ${typeEvenement}`);
+  }
+  const suffix = randomUUID().replaceAll('-', '');
+  const functionName = `test_fail_event_${suffix}`;
+  const triggerName = `test_fail_event_${suffix}`;
+  const db = getDb();
+  await db.execute(`
+    CREATE FUNCTION ${functionName}() RETURNS TRIGGER
+    LANGUAGE plpgsql AS $$
+    BEGIN
+      IF NEW.type_evenement = '${typeEvenement}' THEN
+        RAISE EXCEPTION 'Échec injecté de journalisation pour le test transactionnel';
+      END IF;
+      RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER ${triggerName}
+    BEFORE INSERT ON evenement_metier
+    FOR EACH ROW EXECUTE FUNCTION ${functionName}();
+  `);
+
+  return async () => {
+    await db.execute(`
+      DROP TRIGGER ${triggerName} ON evenement_metier;
+      DROP FUNCTION ${functionName}();
+    `);
+  };
+}
+
+export async function failTableWriteForTest(
+  tableName:
+    | 'notification'
+    | 'historique_priorite_dossier'
+    | 'intervention'
+    | 'publication_flux'
+    | 'photo_publication'
+    | 'utilisateur'
+    | 'session'
+    | 'delegation_decision_equipe'
+    | 'disponibilite_equipe'
+    | 'type_dechet'
+    | 'equipe'
+    | 'appartenance_equipe',
+): Promise<() => Promise<void>> {
+  const suffix = randomUUID().replaceAll('-', '');
+  const functionName = `test_fail_write_${suffix}`;
+  const triggerName = `test_fail_write_${suffix}`;
+  const db = getDb();
+  await db.execute(`
+    CREATE FUNCTION ${functionName}() RETURNS TRIGGER
+    LANGUAGE plpgsql AS $$
+    BEGIN
+      RAISE EXCEPTION 'Échec injecté sur ${tableName} pour le test transactionnel';
+    END;
+    $$;
+    CREATE TRIGGER ${triggerName}
+    BEFORE INSERT OR UPDATE OR DELETE ON ${tableName}
+    FOR EACH ROW EXECUTE FUNCTION ${functionName}();
+  `);
+
+  return async () => {
+    await db.execute(`
+      DROP TRIGGER ${triggerName} ON ${tableName};
+      DROP FUNCTION ${functionName}();
+    `);
+  };
+}

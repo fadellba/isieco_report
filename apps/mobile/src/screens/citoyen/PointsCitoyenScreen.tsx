@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,12 @@ import {
 } from 'react-native';
 import { mobileApi } from '../../services/api.js';
 import { PointItem } from '../../types/index.js';
+import { useTheme } from '../../context/ThemeContext.js';
+import type { DesignTokens } from '@isieco/shared';
 
 export const PointsCitoyenScreen: React.FC = () => {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [solde, setSolde] = useState<number>(0);
   const [historique, setHistorique] = useState<PointItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,7 +61,7 @@ export const PointsCitoyenScreen: React.FC = () => {
       <Text style={styles.sectionTitle}>Historique d attribution</Text>
 
       {loading ? (
-        <ActivityIndicator style={{ marginTop: 30 }} size="large" color="#16a34a" />
+        <ActivityIndicator style={{ marginTop: 30 }} size="large" color={colors.primary} />
       ) : (
         <FlatList
           data={historique}
@@ -69,7 +73,7 @@ export const PointsCitoyenScreen: React.FC = () => {
                 setRefreshing(true);
                 fetchPoints();
               }}
-              colors={['#16a34a']}
+              colors={[colors.primary]}
             />
           }
           contentContainerStyle={styles.list}
@@ -101,19 +105,19 @@ export const PointsCitoyenScreen: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (colors: DesignTokens) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
     padding: 16,
   },
   heroCard: {
-    backgroundColor: '#15803d',
+    backgroundColor: colors.primary,
     borderRadius: 20,
     padding: 22,
     alignItems: 'center',
     marginBottom: 20,
-    shadowColor: '#15803d',
+    shadowColor: colors.primary,
     shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 4,
@@ -121,30 +125,30 @@ const styles = StyleSheet.create({
   heroSubtitle: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#bbf7d0',
+    color: colors.onPrimary,
     letterSpacing: 1,
   },
   heroPoints: {
     fontSize: 42,
     fontWeight: '900',
-    color: '#ffffff',
+    color: colors.onPrimary,
     marginVertical: 4,
   },
   rankPill: {
-    backgroundColor: '#166534',
+    backgroundColor: colors.primarySubtle,
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 20,
     marginVertical: 6,
   },
   rankText: {
-    color: '#f0fdf4',
+    color: colors.primary,
     fontSize: 11,
     fontWeight: '800',
   },
   heroDescription: {
     fontSize: 11,
-    color: '#dcfce7',
+    color: colors.onPrimary,
     textAlign: 'center',
     marginTop: 6,
     lineHeight: 16,
@@ -152,7 +156,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#1e293b',
+    color: colors.textPrimary,
     textTransform: 'uppercase',
     marginBottom: 10,
   },
@@ -160,14 +164,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   pointRow: {
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     padding: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.border,
   },
   pointLeft: {
     flex: 1,
@@ -176,17 +180,17 @@ const styles = StyleSheet.create({
   pointMotif: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#0f172a',
+    color: colors.textPrimary,
   },
   pointDate: {
     fontSize: 10,
-    color: '#94a3b8',
+    color: colors.textSecondary,
     marginTop: 2,
   },
   pointValue: {
     fontSize: 14,
     fontWeight: '900',
-    color: '#16a34a',
+    color: colors.primary,
   },
   empty: {
     padding: 30,
@@ -194,7 +198,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 18,
   },
