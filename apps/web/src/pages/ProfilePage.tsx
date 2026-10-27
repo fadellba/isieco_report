@@ -7,12 +7,14 @@ import {
   KeyRound,
   LockKeyhole,
   Mail,
+  Palette,
   Save,
   ShieldCheck,
   UserRound,
 } from 'lucide-react';
 import { api } from '../api/client.js';
 import { useAuth } from '../context/AuthContext.js';
+import { ThemePreferenceControl } from '../components/layout/ThemePreferenceControl.js';
 
 const ROLE_LABELS: Record<RoleCode, string> = {
   [RoleCode.CITOYEN]: 'Citoyen',
@@ -102,9 +104,9 @@ export const ProfilePage: React.FC = () => {
     <section className="settings-page">
       <header className="settings-heading">
         <div>
-          <div className="ops-eyebrow"><span /> COMPTE & PRÉFÉRENCES</div>
+          <div className="ops-eyebrow"><span /> COMPTE &amp; PRÉFÉRENCES</div>
           <h1>Mon profil</h1>
-          <p>Gérez vos informations personnelles et la sécurité de votre accès.</p>
+          <p>Gérez vos informations personnelles, la sécurité de votre accès et vos préférences d'affichage.</p>
         </div>
         <span className="settings-account-state"><i /> COMPTE ACTIF</span>
       </header>
@@ -136,7 +138,7 @@ export const ProfilePage: React.FC = () => {
           </div>
           <div className="settings-note">
             <BadgeCheck size={15} />
-            <span>Les habilitations sont gérées par l’administration. Elles ne peuvent pas être modifiées depuis votre profil.</span>
+            <span>Les habilitations sont gérées par l'administration. Elles ne peuvent pas être modifiées depuis votre profil.</span>
           </div>
         </aside>
 
@@ -181,7 +183,7 @@ export const ProfilePage: React.FC = () => {
           <article className="settings-card">
             <div className="settings-card__heading">
               <span className="settings-icon settings-icon--blue"><LockKeyhole size={17} /></span>
-              <div><h2>Mot de passe & sécurité</h2><p>Un nouveau mot de passe ferme vos autres sessions.</p></div>
+              <div><h2>Mot de passe &amp; sécurité</h2><p>Un nouveau mot de passe ferme vos autres sessions.</p></div>
             </div>
             <form onSubmit={submitPassword} className="settings-form">
               <label>
@@ -207,6 +209,16 @@ export const ProfilePage: React.FC = () => {
                 </button>
               </div>
             </form>
+          </article>
+
+          <article className="settings-card">
+            <div className="settings-card__heading">
+              <span className="settings-icon" style={{ color: 'var(--c-accent, #EA580C)' }}><Palette size={17} /></span>
+              <div><h2>Apparence &amp; Thème</h2><p>Choisissez le thème d'affichage qui vous convient.</p></div>
+            </div>
+            <div className="settings-form">
+              <ThemePreferenceControl />
+            </div>
           </article>
         </div>
       </div>

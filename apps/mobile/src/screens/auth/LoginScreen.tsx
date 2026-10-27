@@ -13,12 +13,11 @@ import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext.js';
 import { setApiBaseUrl, getApiBaseUrl } from '../../services/api.js';
 import { useTheme } from '../../context/ThemeContext.js';
-import { ThemePreferenceControl } from '../../components/ThemePreferenceControl.js';
 import { Logo } from '../../components/Logo.js';
 import type { DesignTokens } from '@isieco/shared';
 
 export const LoginScreen: React.FC = () => {
-  const { login, quickLoginAsPersona, loading, initializationError } = useAuth();
+  const { login, loading, initializationError } = useAuth();
   const { colors, theme } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [email, setEmail] = useState('');
@@ -44,14 +43,6 @@ export const LoginScreen: React.FC = () => {
     }
   };
 
-  const handlePersona = async (pEmail: string, pPass: string) => {
-    try {
-      await quickLoginAsPersona(pEmail, pPass);
-    } catch (err: any) {
-      Alert.alert('Échec de connexion', err.message || 'Impossible de se connecter.');
-    }
-  };
-
   const handleSaveApiUrl = async () => {
     try {
       await setApiBaseUrl(apiUrl);
@@ -71,12 +62,8 @@ export const LoginScreen: React.FC = () => {
       <View style={styles.header}>
         <Logo size="medium" showSubtitle={true} tone={theme === 'dark' ? 'dark' : 'light'} />
         <Text style={styles.subtitle}>
-          Application Nomade Citoyens & Agents de Terrain (Plateau & Médina)
+          Application Nomade Citoyens &amp; Agents de Terrain (Plateau &amp; Médina)
         </Text>
-      </View>
-
-      <View style={styles.themeControl}>
-        <ThemePreferenceControl />
       </View>
 
       {/* Login Card */}
@@ -121,43 +108,7 @@ export const LoginScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {__DEV__ && (
-        <View style={styles.personaSection}>
-          <Text style={styles.personaTitle}>Comptes de Test Dakar (Accès 1-Clic)</Text>
-          <Text style={styles.personaSubtitle}>Sélectionnez un profil pour vous connecter sans mot de passe :</Text>
-
-          <View style={styles.personaGrid}>
-            <TouchableOpacity
-              style={styles.personaBtn}
-              onPress={() => handlePersona('citoyen@isieco.sn', 'Password@123')}
-            >
-              <Text style={styles.personaRole}>CITOYEN</Text>
-              <Text style={styles.personaName}>Awa Diallo</Text>
-              <Text style={styles.personaLoc}>Compte de démonstration</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.personaBtn}
-              onPress={() => handlePersona('citoyen2@isieco.sn', 'Password@123')}
-            >
-              <Text style={styles.personaRole}>CITOYEN</Text>
-              <Text style={styles.personaName}>Babacar Seck</Text>
-              <Text style={styles.personaLoc}>Compte de démonstration</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.personaBtn, styles.personaBtnTerrain]}
-              onPress={() => handlePersona('terrain@isieco.sn', 'Password@123')}
-            >
-              <Text style={styles.personaRoleTerrain}>AGENT TERRAIN</Text>
-              <Text style={styles.personaName}>Modou Fall</Text>
-              <Text style={styles.personaLoc}>Compte de démonstration</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
-      {/* Network Configuration toggle */}
+      {/* Network Configuration toggle — DEV only */}
       {__DEV__ && (
         <>
           <TouchableOpacity
@@ -201,33 +152,12 @@ const createStyles = (colors: DesignTokens) => StyleSheet.create({
     alignItems: 'center',
     marginBottom: 28,
   },
-  badge: {
-    backgroundColor: colors.primarySubtle,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-    marginBottom: 8,
-  },
-  badgeText: {
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: colors.textPrimary,
-  },
   subtitle: {
     fontSize: 12,
     color: colors.textSecondary,
     textAlign: 'center',
     marginTop: 4,
     maxWidth: 280,
-  },
-  themeControl: {
-    marginBottom: 18,
   },
   card: {
     backgroundColor: colors.surface,
@@ -282,59 +212,6 @@ const createStyles = (colors: DesignTokens) => StyleSheet.create({
     color: colors.onPrimary,
     fontSize: 14,
     fontWeight: '700',
-  },
-  personaSection: {
-    marginTop: 28,
-  },
-  personaTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: colors.textPrimary,
-    textTransform: 'uppercase',
-  },
-  personaSubtitle: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginBottom: 12,
-  },
-  personaGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  personaBtn: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    padding: 12,
-  },
-  personaBtnTerrain: {
-    borderColor: colors.border,
-    backgroundColor: colors.surfaceRaised,
-  },
-  personaRole: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: colors.brandGreen,
-  },
-  personaRoleTerrain: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: colors.info,
-  },
-  personaName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textPrimary,
-    marginTop: 2,
-  },
-  personaLoc: {
-    fontSize: 10,
-    color: colors.textSecondary,
-    marginTop: 1,
   },
   configToggle: {
     alignItems: 'center',

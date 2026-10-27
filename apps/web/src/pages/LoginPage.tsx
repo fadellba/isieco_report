@@ -12,22 +12,6 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import './login.css';
-import { ThemePreferenceControl } from '../components/layout/ThemePreferenceControl.js';
-
-const DEMO_PERSONAS = [
-  {
-    label: 'Administrateur système',
-    email: 'admin@isieco.sn',
-    role: 'ADMIN',
-    icon: ShieldCheck,
-  },
-  {
-    label: 'Équipe métier complète',
-    email: 'operations@isieco.sn',
-    role: '6 rôles métier',
-    icon: Recycle,
-  },
-];
 
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
@@ -38,27 +22,18 @@ export const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const signIn = async (accountEmail: string, accountPassword: string) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     try {
       setLoading(true);
       setError(null);
-      await login(accountEmail, accountPassword);
+      await login(email.trim(), password);
       navigate('/', { replace: true });
     } catch (loginError) {
       setError(loginError instanceof Error ? loginError.message : 'Connexion impossible. Vérifiez vos identifiants.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    await signIn(email.trim(), password);
-  };
-
-  const handleQuickLogin = async (accountEmail: string) => {
-    setEmail(accountEmail);
-    await signIn(accountEmail, 'Password@123');
   };
 
   return (
@@ -87,7 +62,7 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
           <div className="login-photo-credit">
-            <span>Photo d’illustration · Abeokuta, Nigeria</span>
+            <span>Photo d'illustration · Abeokuta, Nigeria</span>
             <a
               href="https://commons.wikimedia.org/wiki/File:Waste_Plastic_Bottles.jpg"
               target="_blank"
@@ -101,14 +76,11 @@ export const LoginPage: React.FC = () => {
         <section className="login-panel" aria-labelledby="login-title">
           <div className="login-panel__top">
             <span className="login-secure"><LockKeyhole size={13} /> ACCÈS SÉCURISÉ</span>
-            <div className="login-panel__top-actions">
-              <span className="login-panel__location">DAKAR, SÉNÉGAL</span>
-              <ThemePreferenceControl compact />
-            </div>
+            <span className="login-panel__location">DAKAR, SÉNÉGAL</span>
           </div>
 
           <div className="login-panel__content">
-            <span className="login-kicker login-kicker--green">ESPACE AGENTS & ADMINISTRATION</span>
+            <span className="login-kicker login-kicker--green">ESPACE AGENTS &amp; ADMINISTRATION</span>
             <h2 id="login-title">Bienvenue dans votre centre de suivi.</h2>
             <p className="login-panel__intro">Connectez-vous pour qualifier les signalements et piloter les opérations de salubrité.</p>
 
@@ -157,37 +129,6 @@ export const LoginPage: React.FC = () => {
                 {!loading && <ArrowRight size={16} />}
               </button>
             </form>
-
-            {import.meta.env.DEV && (
-              <>
-                <div className="login-divider"><span>OU ACCÈS DE DÉMONSTRATION</span></div>
-                <div className="login-demo-list">
-                  {DEMO_PERSONAS.map((persona) => {
-                    const Icon = persona.icon;
-                    return (
-                      <button
-                        key={persona.email}
-                        className="login-demo-card"
-                        type="button"
-                        onClick={() => void handleQuickLogin(persona.email)}
-                        disabled={loading}
-                      >
-                        <span className="login-demo-card__icon"><Icon size={17} /></span>
-                        <span className="login-demo-card__text">
-                          <strong>{persona.label}</strong>
-                          <small>{persona.email}</small>
-                        </span>
-                        <span className="login-demo-card__role">{persona.role}</span>
-                        <ArrowRight className="login-demo-card__arrow" size={15} />
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="login-demo-note">
-                  Accès de test local · Mot de passe : <code>Password@123</code>
-                </p>
-              </>
-            )}
           </div>
 
           <footer className="login-panel__footer">
