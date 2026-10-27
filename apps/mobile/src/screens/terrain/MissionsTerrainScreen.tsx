@@ -11,6 +11,7 @@ import {
   Alert,
   Platform,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { mobileApi } from '../../services/api.js';
 import { MissionTerrainItem } from '../../types/index.js';
 import { useTheme } from '../../context/ThemeContext.js';
@@ -137,7 +138,9 @@ export const MissionsTerrainScreen: React.FC<{ navigation: any }> = ({ navigatio
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Text style={styles.emptyEmoji}>🚛</Text>
+              <View style={styles.emptyIconCircle}>
+                <Feather name="truck" size={32} color={colors.primary} />
+              </View>
               <Text style={styles.emptyTitle}>Aucune intervention en attente</Text>
               <Text style={styles.emptySubtitle}>
                 Toutes les missions de votre équipe sont à jour.
@@ -174,8 +177,9 @@ export const MissionsTerrainScreen: React.FC<{ navigation: any }> = ({ navigatio
                 </Text>
 
                 <View style={styles.locRow}>
+                  <Feather name="map-pin" size={13} color={colors.textSecondary} style={{ marginRight: 5 }} />
                   <Text style={styles.locText}>
-                    📍 {item.descriptionLocalisation || (item.latitude ? `${item.latitude.toFixed(4)}, ${item.longitude?.toFixed(4)}` : 'Secteur communal')}
+                    {item.descriptionLocalisation || (item.latitude ? `${item.latitude.toFixed(4)}, ${item.longitude?.toFixed(4)}` : 'Secteur communal')}
                   </Text>
                 </View>
 
@@ -190,7 +194,10 @@ export const MissionsTerrainScreen: React.FC<{ navigation: any }> = ({ navigatio
                       {startingId === item.idIntervention ? (
                         <ActivityIndicator color={colors.onPrimary} size="small" />
                       ) : (
-                        <Text style={styles.startBtnText}>▶ Démarrer sur site</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Feather name="play" size={13} color={colors.onPrimary} style={{ marginRight: 6 }} />
+                          <Text style={styles.startBtnText}>Démarrer sur site</Text>
+                        </View>
                       )}
                     </TouchableOpacity>
                   )}
@@ -200,15 +207,19 @@ export const MissionsTerrainScreen: React.FC<{ navigation: any }> = ({ navigatio
                       style={[styles.reportBtn, isEnCours && styles.reportBtnPrimary]}
                       onPress={() => navigation.navigate('CompteRendu', { mission: item })}
                     >
-                      <Text style={[styles.reportBtnText, isEnCours && styles.reportBtnTextPrimary]}>
-                        📝 Clôturer & Rapport
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Feather name="file-text" size={14} color={colors.primary} style={{ marginRight: 6 }} />
+                        <Text style={[styles.reportBtnText, isEnCours && styles.reportBtnTextPrimary]}>
+                          Clôturer & Rapport
+                        </Text>
+                      </View>
                     </TouchableOpacity>
                   ) : !isTerminee ? (
                     <Text style={styles.loadingText}>Démarrez l’intervention pour saisir le rapport.</Text>
                   ) : (
                     <View style={styles.donePill}>
-                      <Text style={styles.doneText}>✓ Mission Terminée</Text>
+                      <Feather name="check-circle" size={13} color={colors.success} style={{ marginRight: 5 }} />
+                      <Text style={styles.doneText}>Mission Terminée</Text>
                     </View>
                   )}
                 </View>
@@ -342,6 +353,8 @@ const createStyles = (colors: DesignTokens) => StyleSheet.create({
     marginBottom: 8,
   },
   locRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderTopWidth: 1,
     borderColor: colors.border,
     paddingTop: 8,
@@ -350,6 +363,7 @@ const createStyles = (colors: DesignTokens) => StyleSheet.create({
   locText: {
     fontSize: 11,
     color: colors.textSecondary,
+    flex: 1,
   },
   actionsRow: {
     flexDirection: 'row',
@@ -393,7 +407,9 @@ const createStyles = (colors: DesignTokens) => StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     width: '100%',
   },
   doneText: {
@@ -405,9 +421,14 @@ const createStyles = (colors: DesignTokens) => StyleSheet.create({
     paddingVertical: 60,
     alignItems: 'center',
   },
-  emptyEmoji: {
-    fontSize: 40,
-    marginBottom: 8,
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.primarySubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 15,

@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { mobileApi } from '../../services/api.js';
 import { PointItem } from '../../types/index.js';
 import { useTheme } from '../../context/ThemeContext.js';
@@ -37,12 +38,14 @@ export const PointsCitoyenScreen: React.FC = () => {
     fetchPoints();
   }, []);
 
-  const getBadgeTitle = (pts: number) => {
-    if (pts >= 300) return '🏆 Champion de Salubrité Dakar';
-    if (pts >= 150) return '⭐ Sentinelle Urbaine Dakar';
-    if (pts >= 50) return '🌿 Éco-Citoyen Engagé';
-    return '🌱 Citoyen Vigile';
+  const getBadgeInfo = (pts: number): { title: string; icon: 'award' | 'star' | 'shield' | 'check-circle' } => {
+    if (pts >= 300) return { title: 'Champion de Salubrité Dakar', icon: 'award' };
+    if (pts >= 150) return { title: 'Sentinelle Urbaine Dakar', icon: 'star' };
+    if (pts >= 50) return { title: 'Éco-Citoyen Engagé', icon: 'shield' };
+    return { title: 'Citoyen Vigile', icon: 'check-circle' };
   };
+
+  const badge = getBadgeInfo(solde);
 
   return (
     <View style={styles.container}>
@@ -51,7 +54,8 @@ export const PointsCitoyenScreen: React.FC = () => {
         <Text style={styles.heroSubtitle}>VOTRE SOLDE ÉCO-CITOYEN</Text>
         <Text style={styles.heroPoints}>{solde} pts</Text>
         <View style={styles.rankPill}>
-          <Text style={styles.rankText}>{getBadgeTitle(solde)}</Text>
+          <Feather name={badge.icon} size={14} color={colors.primary} style={{ marginRight: 6 }} />
+          <Text style={styles.rankText}>{badge.title}</Text>
         </View>
         <Text style={styles.heroDescription}>
           Gagnez des points à chaque signalement qualifié et validé par les services municipaux de Dakar.
@@ -136,6 +140,8 @@ const createStyles = (colors: DesignTokens) => StyleSheet.create({
   },
   rankPill: {
     backgroundColor: colors.primarySubtle,
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 5,
     borderRadius: 20,

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { mobileApi } from '../../services/api.js';
 import { NotificationItem } from '../../types/index.js';
 import { useTheme } from '../../context/ThemeContext.js';
@@ -77,6 +78,9 @@ export const NotificationsScreen: React.FC = () => {
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <View style={styles.empty}>
+              <View style={styles.emptyIconCircle}>
+                <Feather name="bell-off" size={28} color={colors.textSecondary} />
+              </View>
               <Text style={styles.emptyText}>Aucune notification récente.</Text>
             </View>
           }
@@ -86,10 +90,12 @@ export const NotificationsScreen: React.FC = () => {
               onPress={() => !item.lu && handleMarkAsRead(item.idNotification)}
             >
               <View style={styles.notifHeader}>
-                <Text style={[styles.notifTitle, !item.lu && styles.notifTitleBold]}>
-                  {!item.lu ? '● ' : ''}
-                  {item.titre}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                  {!item.lu && <View style={styles.unreadDot} />}
+                  <Text style={[styles.notifTitle, !item.lu && styles.notifTitleBold]}>
+                    {item.titre}
+                  </Text>
+                </View>
                 <Text style={styles.notifDate}>
                   {new Date(item.dateCreation).toLocaleDateString('fr-SN', {
                     day: 'numeric',
@@ -175,9 +181,25 @@ const createStyles = (colors: DesignTokens) => StyleSheet.create({
     color: colors.textSecondary,
     lineHeight: 16,
   },
+  unreadDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+    marginRight: 6,
+  },
   empty: {
     padding: 40,
     alignItems: 'center',
+  },
+  emptyIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.surfaceRaised,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
   emptyText: {
     fontSize: 12,

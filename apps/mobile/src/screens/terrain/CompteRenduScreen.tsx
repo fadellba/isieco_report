@@ -93,11 +93,11 @@ export const CompteRenduScreen: React.FC<{ route: any; navigation: any }> = ({
       return;
     }
 
-    if (resultat !== ResultatIntervention.SUCCES_TOTAL && (!motifException || motifException.trim().length < 5)) {
+    if (resultat !== ResultatIntervention.SUCCES_TOTAL && (!motifException || motifException.trim().length < 10)) {
       showFeedback(
         'error',
         'Motif d exception requis',
-        'Veuillez justifier la raison du résultat partiel ou de l impossibilité d intervention.'
+        'Un motif d au moins 10 caractères justifiant le résultat partiel ou l impossibilité d intervention est obligatoire.'
       );
       return;
     }
@@ -273,6 +273,9 @@ export const CompteRenduScreen: React.FC<{ route: any; navigation: any }> = ({
             }}
             editable={!submitted}
           />
+          <Text style={[styles.charCount, motifException.trim().length >= 10 ? styles.countValid : styles.countInvalid]}>
+            {motifException.trim().length} / 10 caractères min (Règle RG40)
+          </Text>
         </View>
       )}
 

@@ -7,7 +7,7 @@ import {
   SafeAreaView,
   Dimensions,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Feather } from '@expo/vector-icons';
 import { Logo } from '../../components/Logo.js';
 import { useOnboarding } from '../../context/OnboardingContext.js';
 import { useTheme } from '../../context/ThemeContext.js';
@@ -16,7 +16,7 @@ import type { DesignTokens } from '@isieco/shared';
 interface Slide {
   id: string;
   badge: string;
-  icon: string;
+  iconName: keyof typeof Feather.glyphMap;
   title: string;
   subtitle: string;
   highlight: string;
@@ -26,7 +26,7 @@ const SLIDES: Slide[] = [
   {
     id: '1',
     badge: 'TERRITOIRE DAKAR',
-    icon: '🏙️',
+    iconName: 'map-pin',
     title: 'Pour un Dakar Propre & Sain',
     subtitle:
       'Participez activement à la salubrité urbaine de Dakar-Plateau et de la Médina. Une action citoyenne collective pour préserver notre cadre de vie.',
@@ -35,7 +35,7 @@ const SLIDES: Slide[] = [
   {
     id: '2',
     badge: 'GÉOLOCALISATION & PHOTO',
-    icon: '📍',
+    iconName: 'camera',
     title: 'Signalez les Dépôts en 1-Clic',
     subtitle:
       'Capturez la position GPS automatique, prenez une photo du tas de déchets et sélectionnez les catégories constatées (plastique, gravats, encombrants).',
@@ -44,16 +44,16 @@ const SLIDES: Slide[] = [
   {
     id: '3',
     badge: 'GAMIFICATION CITOYENNE',
-    icon: '🏆',
+    iconName: 'award',
     title: 'Gagnez des Points Éco-Citoyens',
     subtitle:
-      'Chaque constat vérifié crédite votre profil de points. Grimpez les échelons, de Citoyen Vigile jusqu au rang prestigieux de Champion de Salubrité !',
+      'Chaque constat vérifié crédite votre profil de points. Grimpez les échelons, de Citoyen Vigile jusqu’au rang prestigieux de Champion de Salubrité !',
     highlight: '+10 pts par qualification • +20 pts par clôture validée',
   },
   {
     id: '4',
     badge: 'TRAÇABILITÉ MUNICIPALE',
-    icon: '🚛',
+    iconName: 'check-circle',
     title: 'Équipes Municipales Déployées',
     subtitle:
       'Les équipes techniques communales sont dépêchées sur les lieux. Chaque intervention est certifiée par un compte-rendu terrain et une vérification 100%.',
@@ -94,7 +94,12 @@ export const OnboardingScreen: React.FC<{ onComplete?: () => void }> = ({ onComp
       {/* Top Header: Logo & Skip button */}
       <View style={styles.topBar}>
         <Logo size="small" showSubtitle={false} tone={theme === 'dark' ? 'dark' : 'light'} />
-        <TouchableOpacity style={styles.skipBtn} onPress={handleFinish}>
+        <TouchableOpacity
+          style={styles.skipBtn}
+          onPress={handleFinish}
+          accessibilityRole="button"
+          accessibilityLabel="Passer la présentation"
+        >
           <Text style={styles.skipText}>Passer</Text>
         </TouchableOpacity>
       </View>
@@ -106,9 +111,9 @@ export const OnboardingScreen: React.FC<{ onComplete?: () => void }> = ({ onComp
           <Text style={styles.badgeText}>{current.badge}</Text>
         </View>
 
-        {/* Big Illustration Emoji Circle */}
+        {/* Icon Container with Glass Glow */}
         <View style={styles.illustrationCircle}>
-          <Text style={styles.illustrationText}>{current.icon}</Text>
+          <Feather name={current.iconName} size={48} color={colors.primary} />
         </View>
 
         {/* Titles */}
@@ -117,7 +122,8 @@ export const OnboardingScreen: React.FC<{ onComplete?: () => void }> = ({ onComp
 
         {/* Feature Highlight Pill */}
         <View style={styles.highlightBox}>
-          <Text style={styles.highlightText}>✨ {current.highlight}</Text>
+          <Feather name="check" size={14} color={colors.primary} style={{ marginRight: 6 }} />
+          <Text style={styles.highlightText}>{current.highlight}</Text>
         </View>
       </View>
 
@@ -139,7 +145,12 @@ export const OnboardingScreen: React.FC<{ onComplete?: () => void }> = ({ onComp
         {/* Actions Row */}
         <View style={styles.actionsRow}>
           {currentIndex > 0 ? (
-            <TouchableOpacity style={styles.prevBtn} onPress={handlePrev}>
+            <TouchableOpacity
+              style={styles.prevBtn}
+              onPress={handlePrev}
+              accessibilityRole="button"
+              accessibilityLabel="Étape précédente"
+            >
               <Text style={styles.prevBtnText}>Précédent</Text>
             </TouchableOpacity>
           ) : (
@@ -149,16 +160,26 @@ export const OnboardingScreen: React.FC<{ onComplete?: () => void }> = ({ onComp
           <TouchableOpacity
             style={[styles.nextBtn, isLast && styles.finishBtn]}
             onPress={handleNext}
+            accessibilityRole="button"
+            accessibilityLabel={isLast ? "Commencer l'utilisation" : 'Étape suivante'}
           >
             <Text style={styles.nextBtnText}>
-              {isLast ? 'Commencer l aventure 🚀' : 'Suivant →'}
+              {isLast ? 'Commencer' : 'Suivant'}
             </Text>
+            <Feather
+              name={isLast ? 'check' : 'arrow-right'}
+              size={16}
+              color={colors.onPrimary}
+              style={{ marginLeft: 6 }}
+            />
           </TouchableOpacity>
         </View>
       </View>
     </SafeAreaView>
   );
 };
+
+const { width } = Dimensions.get('window');
 
 const createStyles = (colors: DesignTokens) => StyleSheet.create({
   container: {
@@ -176,9 +197,11 @@ const createStyles = (colors: DesignTokens) => StyleSheet.create({
   },
   skipBtn: {
     paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     borderRadius: 20,
     backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   skipText: {
     fontSize: 12,
@@ -207,30 +230,27 @@ const createStyles = (colors: DesignTokens) => StyleSheet.create({
     letterSpacing: 0.8,
   },
   illustrationCircle: {
-    width: 130,
-    height: 130,
-    borderRadius: 65,
+    width: 110,
+    height: 110,
+    borderRadius: 55,
     backgroundColor: colors.primarySubtle,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 28,
-    borderWidth: 4,
+    marginBottom: 24,
+    borderWidth: 2,
     borderColor: colors.border,
     shadowColor: colors.primary,
     shadowOpacity: 0.15,
     shadowRadius: 16,
     elevation: 3,
   },
-  illustrationText: {
-    fontSize: 62,
-  },
   title: {
-    fontSize: 24,
-    fontWeight: '900',
+    fontSize: 22,
+    fontWeight: '800',
     color: colors.textPrimary,
     textAlign: 'center',
-    marginBottom: 12,
-    letterSpacing: -0.5,
+    marginBottom: 10,
+    letterSpacing: -0.4,
   },
   subtitle: {
     fontSize: 13,
@@ -238,8 +258,11 @@ const createStyles = (colors: DesignTokens) => StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 20,
+    maxWidth: 320,
   },
   highlightBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: colors.surface,
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -285,6 +308,8 @@ const createStyles = (colors: DesignTokens) => StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   prevBtnText: {
     fontSize: 13,
@@ -293,12 +318,14 @@ const createStyles = (colors: DesignTokens) => StyleSheet.create({
   },
   nextBtn: {
     flex: 2,
+    flexDirection: 'row',
     backgroundColor: colors.primary,
     paddingVertical: 14,
     borderRadius: 14,
     alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: colors.primary,
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 10,
     elevation: 3,
   },

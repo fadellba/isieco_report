@@ -1,7 +1,8 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Text } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext.js';
 
 import { MissionsTerrainScreen } from '../screens/terrain/MissionsTerrainScreen.js';
@@ -17,9 +18,16 @@ const MissionsStack: React.FC = () => {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: colors.surface },
-        headerTitleStyle: { fontWeight: '800', color: colors.textPrimary },
+        headerStyle: {
+          backgroundColor: colors.surface,
+        },
+        headerTitleStyle: {
+          fontWeight: '800',
+          fontSize: 16,
+          color: colors.textPrimary,
+        },
         headerTintColor: colors.primary,
+        headerShadowVisible: false,
       }}
     >
       <Stack.Screen
@@ -41,19 +49,39 @@ export const TerrainNavigator: React.FC = () => {
   return (
     <Tab.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: colors.surface },
-        headerTitleStyle: { fontWeight: '800', color: colors.textPrimary },
+        headerStyle: {
+          backgroundColor: colors.surface,
+          elevation: 0,
+          shadowOpacity: 0,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.border,
+        },
+        headerTitleStyle: {
+          fontWeight: '800',
+          fontSize: 16,
+          color: colors.textPrimary,
+        },
         headerTintColor: colors.primary,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textSecondary,
         tabBarStyle: {
-          height: 62,
-          paddingBottom: 8,
-          paddingTop: 6,
+          height: Platform.OS === 'ios' ? 84 : 68,
+          paddingBottom: Platform.OS === 'ios' ? 24 : 10,
+          paddingTop: 8,
           backgroundColor: colors.surface,
+          borderTopWidth: 1,
           borderTopColor: colors.border,
+          elevation: 8,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.04,
+          shadowRadius: 10,
         },
-        tabBarLabelStyle: { fontSize: 10, fontWeight: '700' },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '700',
+          marginTop: 2,
+        },
       }}
     >
       <Tab.Screen
@@ -62,7 +90,11 @@ export const TerrainNavigator: React.FC = () => {
         options={{
           headerShown: false,
           tabBarLabel: 'Missions',
-          tabBarIcon: () => <Text style={{ fontSize: 20 }}>🚛</Text>,
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
+              <Feather name="truck" size={20} color={color} />
+            </View>
+          ),
         }}
       />
       <Tab.Screen
@@ -71,7 +103,11 @@ export const TerrainNavigator: React.FC = () => {
         options={{
           title: 'Alertes Communales',
           tabBarLabel: 'Alertes',
-          tabBarIcon: () => <Text style={{ fontSize: 20 }}>🔔</Text>,
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
+              <Feather name="bell" size={20} color={color} />
+            </View>
+          ),
         }}
       />
       <Tab.Screen
@@ -80,9 +116,26 @@ export const TerrainNavigator: React.FC = () => {
         options={{
           title: 'Profil Agent',
           tabBarLabel: 'Profil',
-          tabBarIcon: () => <Text style={{ fontSize: 20 }}>👤</Text>,
+          tabBarIcon: ({ color, focused }) => (
+            <View style={[styles.iconContainer, focused && styles.activeIconContainer]}>
+              <Feather name="user" size={20} color={color} />
+            </View>
+          ),
         }}
       />
     </Tab.Navigator>
   );
 };
+
+const styles = StyleSheet.create({
+  iconContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+  },
+  activeIconContainer: {
+    transform: [{ scale: 1.05 }],
+  },
+});

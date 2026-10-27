@@ -36,10 +36,12 @@ const ProtectedLayout: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-isieco-bg">
-        <div className="flex items-center gap-3 text-isieco-muted font-medium text-sm">
-          <RefreshCw className="h-5 w-5 animate-spin text-isieco-primary" />
-          Vérification de la session communale...
+      <div className="flex h-screen w-screen items-center justify-center bg-gradient-to-br from-isieco-bg to-emerald-50">
+        <div className="glass-card p-8 flex flex-col items-center gap-4">
+          <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-isieco-primary to-isieco-primary-light flex items-center justify-center text-white shadow-lg shadow-isieco-primary/20">
+            <RefreshCw className="h-6 w-6 animate-spin" />
+          </div>
+          <span className="text-sm font-medium text-isieco-muted">Vérification de la session communale...</span>
         </div>
       </div>
     );
@@ -50,14 +52,14 @@ const ProtectedLayout: React.FC = () => {
   }
 
   return (
-    <div className="ops-app-shell min-h-screen flex flex-col bg-isieco-bg">
+    <div className="app-shell">
       <Header
         onToggleNavigation={() => setNavigationOpen((open) => !open)}
         navigationOpen={navigationOpen}
       />
       <div className="flex flex-1 min-h-0">
         <Sidebar isOpen={navigationOpen} onNavigate={() => setNavigationOpen(false)} />
-        <main className="ops-main min-w-0 flex-1 overflow-y-auto">
+        <main className="app-main">
           <Outlet />
         </main>
       </div>
@@ -74,13 +76,13 @@ const RequireRole: React.FC<{ roles?: RoleCode[]; children: React.ReactNode }> =
   if (roles && !hasAnyRole(roles)) {
     return (
       <div className="p-8 flex items-center justify-center min-h-[50vh]">
-        <div className="max-w-md rounded-2xl border border-red-200 bg-white p-6 shadow-sm text-center space-y-3">
-          <div className="mx-auto w-12 h-12 rounded-xl bg-red-50 flex items-center justify-center text-red-600">
+         <div className="glass-card-solid max-w-md p-6 text-center space-y-3">
+          <div className="mx-auto w-12 h-12 rounded-xl bg-isieco-destructive-subtle flex items-center justify-center text-isieco-destructive">
             <ShieldAlert className="h-6 w-6" />
           </div>
-          <h2 className="text-lg font-bold text-slate-900">Accès Non Autorisé (RBAC)</h2>
-          <p className="text-xs text-slate-600">
-            Votre profil ({user?.roles.join(', ')}) ne dispose pas des privilèges nécessaires pour accéder à cette interface.
+          <h2 className="text-lg font-bold text-isieco-dark">Accès Non Autorisé</h2>
+          <p className="text-xs text-isieco-muted">
+            Votre profil ({user?.roles.join(', ')}) ne dispose pas des privilèges nécessaires.
           </p>
         </div>
       </div>

@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import type { NotificationItem, NotificationsResponse } from '@isieco/shared';
 import { useAuth } from '../../context/AuthContext.js';
-import { Bell, Leaf, LogOut, User, ShieldCheck, Menu, X } from 'lucide-react';
+import { Bell, Leaf, LogOut, User, ShieldCheck, Menu, X, Check } from 'lucide-react';
 import { api } from '../../api/client.js';
 import { Link } from 'react-router-dom';
-import { ThemePreferenceControl } from './ThemePreferenceControl.js';
 
 interface HeaderProps {
   navigationOpen: boolean;
@@ -34,7 +33,7 @@ export const Header: React.FC<HeaderProps> = ({ navigationOpen, onToggleNavigati
   useEffect(() => {
     if (user) {
       fetchNotifications();
-      const interval = setInterval(fetchNotifications, 30000); // Polling toutes les 30s
+      const interval = setInterval(fetchNotifications, 30000);
       return () => clearInterval(interval);
     }
   }, [user]);
@@ -55,82 +54,99 @@ export const Header: React.FC<HeaderProps> = ({ navigationOpen, onToggleNavigati
   };
 
   return (
-    <header className="ops-header sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-isieco-border bg-isieco-surface px-5">
-      <div className="ops-header__brand flex items-center gap-3">
+    <header className="app-header">
+      {/* Brand */}
+      <div className="flex items-center gap-3">
         <button
           type="button"
-          className="ops-header__menu"
+          className="app-header__menu flex h-9 w-9 items-center justify-center rounded-lg border border-isieco-border bg-white text-isieco-muted hover:border-isieco-primary hover:text-isieco-primary transition-colors cursor-pointer"
           onClick={onToggleNavigation}
           aria-label={navigationOpen ? 'Fermer la navigation' : 'Ouvrir la navigation'}
           aria-controls="ops-primary-navigation"
           aria-expanded={navigationOpen}
         >
-          {navigationOpen ? <X size={19} /> : <Menu size={19} />}
+          {navigationOpen ? <X size={18} /> : <Menu size={18} />}
         </button>
-        <div className="ops-header__brand-icon flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-950 text-emerald-300 ring-1 ring-emerald-800/70">
+
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-isieco-primary to-isieco-primary-light text-white shadow-sm">
           <Leaf aria-hidden="true" className="h-5 w-5" />
         </div>
         <div>
           <h1 className="text-base font-bold text-isieco-dark leading-tight flex items-center gap-2">
             ISI-Eco Report
-            <span className="ops-header__version rounded bg-emerald-950/70 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300 border border-emerald-900">
-              OPS • DAKAR
+            <span className="rounded-md bg-isieco-primary-subtle px-2 py-0.5 text-[10px] font-bold text-isieco-primary border border-isieco-primary/20">
+              DAKAR
             </span>
           </h1>
-          <p className="ops-header__subtitle text-[11px] text-isieco-muted">
-            Signalements <span>·</span> Collecte <span>·</span> Cadre de vie
+          <p className="text-[11px] text-isieco-muted">
+            Signalements <span className="text-isieco-primary">·</span> Collecte <span className="text-isieco-primary">·</span> Cadre de vie
           </p>
         </div>
       </div>
 
-      <div className="ops-header__controls flex items-center gap-4">
-        <ThemePreferenceControl compact />
+      {/* Controls */}
+      <div className="flex items-center gap-3">
+        {/* Notifications */}
         <div className="relative">
           <button
             onClick={() => setShowNotifications(!showNotifications)}
-            className="relative rounded-lg p-2 text-isieco-muted hover:bg-gray-100 hover:text-isieco-dark focus:outline-none"
+            className="relative flex h-9 w-9 items-center justify-center rounded-lg text-isieco-muted hover:bg-isieco-primary-subtle hover:text-isieco-primary transition-colors cursor-pointer"
             title="Notifications internes"
             aria-label={`Notifications internes${unreadCount > 0 ? `, ${unreadCount} non lue${unreadCount > 1 ? 's' : ''}` : ''}`}
             aria-expanded={showNotifications}
           >
-            <Bell className="h-5 w-5" />
+            <Bell className="h-[18px] w-[18px]" />
             {unreadCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 text-[10px] font-bold text-white">
+              <span className="absolute -top-0.5 -right-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-isieco-destructive text-[10px] font-bold text-white px-1">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 rounded-xl border border-isieco-border bg-white p-3 shadow-xl z-50">
-              <div className="flex items-center justify-between border-b border-isieco-border pb-2 mb-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-isieco-dark">
-                  Notifications ({unreadCount} non lues)
+            <div className="notification-dropdown">
+              <div className="flex items-center justify-between border-b border-isieco-border pb-2.5 mb-2.5">
+                <span className="text-xs font-bold text-isieco-dark">
+                  Notifications
                 </span>
+                {unreadCount > 0 && (
+                  <span className="status-badge status-badge--info">
+                    {unreadCount} non lue{unreadCount > 1 ? 's' : ''}
+                  </span>
+                )}
               </div>
               {notificationError && (
-                <p className="mb-2 rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700" role="alert">
+                <p className="mb-2 rounded-lg border border-red-200 bg-isieco-destructive-subtle p-2.5 text-xs text-isieco-destructive" role="alert">
                   {notificationError}
                 </p>
               )}
-              <div className="max-h-72 overflow-y-auto space-y-2">
+              <div className="max-h-72 overflow-y-auto space-y-1.5">
                 {notifications.length === 0 ? (
-                  <p className="text-xs text-isieco-muted text-center py-4">Aucune notification.</p>
+                  <div className="empty-state py-6">
+                    <Bell size={24} />
+                    <span className="text-xs">Aucune notification</span>
+                  </div>
                 ) : (
                   notifications.map((n) => (
-                    <div
+                    <button
+                      type="button"
                       key={n.idNotification}
                       onClick={() => !n.lu && markAsRead(n.idNotification)}
-                      className={`cursor-pointer rounded-lg p-2 text-xs transition-colors ${
-                        n.lu ? 'bg-gray-50 text-gray-600' : 'bg-emerald-50/60 text-isieco-dark font-medium border-l-2 border-isieco-primary'
+                      className={`w-full text-left rounded-lg p-2.5 text-xs transition-all cursor-pointer ${
+                        n.lu
+                          ? 'bg-transparent text-isieco-muted hover:bg-gray-50'
+                          : 'bg-isieco-primary-subtle text-isieco-dark border-l-2 border-isieco-primary hover:bg-emerald-100/60'
                       }`}
                     >
-                      <div className="font-semibold text-isieco-dark">{n.titre}</div>
-                      <div className="mt-0.5 text-isieco-muted leading-relaxed">{n.message}</div>
-                      <div className="mt-1 text-[10px] text-gray-400">
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-semibold text-isieco-dark">{n.titre}</span>
+                        {n.lu && <Check size={14} className="text-isieco-primary shrink-0 mt-0.5" />}
+                      </div>
+                      <div className="mt-1 text-isieco-muted leading-relaxed">{n.message}</div>
+                      <div className="mt-1.5 text-[10px] text-slate-400">
                         {new Date(n.dateCreation).toLocaleTimeString('fr-SN', { hour: '2-digit', minute: '2-digit' })}
                       </div>
-                    </div>
+                    </button>
                   ))
                 )}
               </div>
@@ -138,30 +154,31 @@ export const Header: React.FC<HeaderProps> = ({ navigationOpen, onToggleNavigati
           )}
         </div>
 
+        {/* Profile */}
         {user && (
-          <div className="ops-header__profile flex items-center gap-3 border-l border-isieco-border pl-4">
+          <div className="flex items-center gap-3 border-l border-isieco-border pl-3">
             <Link
               to="/profil"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-slate-700 font-semibold border border-slate-200 hover:border-emerald-700"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-isieco-primary to-isieco-primary-light text-white text-sm font-bold shadow-sm hover:shadow-md transition-shadow"
               title="Ouvrir mon profil et les paramètres"
               aria-label="Ouvrir mon profil et les paramètres"
             >
-              <User className="h-4 w-4" />
+              {user.prenom ? user.prenom[0].toUpperCase() : <User className="h-4 w-4" />}
             </Link>
-            <Link to="/profil" className="ops-header__identity hidden sm:block text-left" title="Mon profil">
+            <Link to="/profil" className="hidden sm:block text-left" title="Mon profil">
               <div className="text-xs font-bold text-isieco-dark">
                 {user.prenom ? `${user.prenom} ${user.nom}` : user.nom}
               </div>
               <div className="flex items-center gap-1">
                 <ShieldCheck className="h-3 w-3 text-isieco-primary" />
                 <span className="text-[10px] font-medium text-isieco-muted">
-                  {user.roles.length > 1 ? `Équipe métier · ${user.roles.length} rôles` : user.roles.join(', ')}
+                  {user.roles.length > 1 ? `${user.roles.length} rôles métier` : user.roles.join(', ')}
                 </span>
               </div>
             </Link>
             <button
               onClick={() => logout()}
-              className="rounded-lg p-2 text-isieco-muted hover:bg-rose-50 hover:text-rose-600 transition-colors"
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-isieco-muted hover:bg-isieco-destructive-subtle hover:text-isieco-destructive transition-colors cursor-pointer"
               title="Se déconnecter"
               aria-label="Se déconnecter"
             >

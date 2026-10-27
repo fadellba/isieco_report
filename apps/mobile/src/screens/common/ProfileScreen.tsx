@@ -7,6 +7,7 @@ import {
   Switch,
   ScrollView,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext.js';
 import { useOffline } from '../../context/OfflineContext.js';
 import { useTheme } from '../../context/ThemeContext.js';
@@ -101,9 +102,20 @@ export const ProfileScreen: React.FC = () => {
         <View style={styles.switchRow}>
           <View style={styles.switchTextCol}>
             <Text style={styles.switchLabel}>Simulateur Réseau Mobile</Text>
-            <Text style={styles.switchDesc}>
-              {isOnline ? '🟢 En ligne (4G/Wifi)' : '🔴 Hors-ligne (Dakar Plateau/Médina)'}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 3 }}>
+              <View
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: isOnline ? colors.success : colors.danger,
+                  marginRight: 6,
+                }}
+              />
+              <Text style={styles.switchDesc}>
+                {isOnline ? 'En ligne (4G/Wifi)' : 'Hors-ligne (Dakar Plateau/Médina)'}
+              </Text>
+            </View>
           </View>
           <Switch
             value={isOnline}
@@ -150,9 +162,12 @@ export const ProfileScreen: React.FC = () => {
             onPress={() => void handleSync()}
             disabled={syncing}
           >
-            <Text style={styles.syncBtnText}>
-              {syncing ? 'Synchronisation en cours...' : '🔄 Vider & Synchroniser la file'}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+              <Feather name="refresh-cw" size={14} color={colors.warning} style={{ marginRight: 6 }} />
+              <Text style={styles.syncBtnText}>
+                {syncing ? 'Synchronisation en cours...' : 'Vider & Synchroniser la file'}
+              </Text>
+            </View>
           </TouchableOpacity>
         )}
 
@@ -160,12 +175,18 @@ export const ProfileScreen: React.FC = () => {
 
       {/* Replay Onboarding Guide */}
       <TouchableOpacity style={styles.onboardingBtn} onPress={handleReplayOnboarding}>
-        <Text style={styles.onboardingBtnText}>📖 Revoir le Guide d'Accueil (Onboarding)</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+          <Feather name="book-open" size={15} color={colors.primary} style={{ marginRight: 8 }} />
+          <Text style={styles.onboardingBtnText}>Revoir le Guide d'Accueil (Onboarding)</Text>
+        </View>
       </TouchableOpacity>
 
       {/* Logout */}
       <TouchableOpacity style={styles.logoutBtn} onPress={() => setConfirmation('logout')}>
-        <Text style={styles.logoutText}>Se Déconnecter</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+          <Feather name="log-out" size={15} color={colors.danger} style={{ marginRight: 8 }} />
+          <Text style={styles.logoutText}>Se Déconnecter</Text>
+        </View>
       </TouchableOpacity>
 
       </ScrollView>

@@ -23,6 +23,7 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   roles: RoleCode[];
+  section?: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -38,12 +39,14 @@ const NAV_ITEMS: NavItem[] = [
       RoleCode.DECISION,
       RoleCode.ADMIN,
     ],
+    section: 'Tableau de bord',
   },
   {
     to: '/qualification',
     label: 'Qualification & Doublons',
     icon: Inbox,
     roles: [RoleCode.QUALIFICATION, RoleCode.TRAITEMENT],
+    section: 'Opérations',
   },
   {
     to: '/interventions',
@@ -66,7 +69,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     to: '/affectations',
-    label: 'Affectations par Volet',
+    label: 'Affectations',
     icon: GitFork,
     roles: [RoleCode.AFFECTATION],
   },
@@ -88,6 +91,7 @@ const NAV_ITEMS: NavItem[] = [
       RoleCode.VERIFICATION,
       RoleCode.ADMIN,
     ],
+    section: 'Analyse',
   },
   {
     to: '/statistiques',
@@ -97,7 +101,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     to: '/audit',
-    label: 'Traçabilité environnementale',
+    label: 'Traçabilité',
     icon: ScrollText,
     roles: [
       RoleCode.ADMIN,
@@ -113,6 +117,7 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Équipe & Accès',
     icon: Users,
     roles: [RoleCode.ADMIN],
+    section: 'Administration',
   },
   {
     to: '/referentiels',
@@ -130,62 +135,76 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onNavigate }) => {
   const { hasAnyRole } = useAuth();
 
+  let lastSection: string | undefined;
+
   return (
     <>
       {isOpen && (
         <button
           type="button"
-          className="ops-sidebar__backdrop"
+          className="app-sidebar__backdrop"
           aria-label="Fermer le menu de navigation"
           onClick={onNavigate}
         />
       )}
       <aside
-        className="ops-sidebar w-60 shrink-0 border-r border-isieco-border bg-isieco-surface min-h-[calc(100vh-4rem)] p-3 flex flex-col justify-between"
+        className="app-sidebar"
         data-open={isOpen}
       >
-      <nav id="ops-primary-navigation" className="space-y-1.5" aria-label="Navigation principale">
-        <div className="ops-sidebar__section-label px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-[0.16em] text-isieco-muted">
-          <Leaf aria-hidden="true" size={13} />
-          Écosystème urbain · Dakar
-        </div>
-        {NAV_ITEMS.map((item) => {
-          if (!hasAnyRole(item.roles)) return null;
+        <nav id="ops-primary-navigation" className="space-y-0.5" aria-label="Navigation principale">
+          {NAV_ITEMS.map((item) => {
+            if (!hasAnyRole(item.roles)) return null;
 
-          const Icon = item.icon;
-          return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              aria-label={item.label}
-              title={item.label}
-              onClick={onNavigate}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-semibold transition-all ${
-                  isActive
-                    ? 'bg-emerald-950/70 text-emerald-300 ring-1 ring-emerald-800/70'
-                    : 'text-gray-700 hover:bg-emerald-950/40 hover:text-emerald-300'
-                }`
-              }
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              <span>{item.label}</span>
-            </NavLink>
-          );
-        })}
-      </nav>
+            const Icon = item.icon;
+            const showSection = item.section && item.section !== lastSection;
+            if (item.section) lastSection = item.section;
 
-      <div className="ops-sidebar__territory rounded-xl bg-slate-50 p-3 border border-slate-200 text-xs text-isieco-muted">
-        <div className="flex items-center gap-2 font-semibold text-isieco-dark">
-          <span className="h-2 w-2 rounded-full bg-emerald-400" />
-          TERRITOIRE PILOTE
+            return (
+              <React.Fragment key={item.to}>
+                {showSection && (
+                  <div className="flex items-center gap-2 px-3 pb-1 pt-4 first:pt-1">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-isieco-muted/70">
+                      {item.section}
+                    </span>
+                    <div className="flex-1 h-px bg-isieco-border/60" />
+                  </div>
+                )}
+                <NavLink
+                  to={item.to}
+                  end={item.to === '/'}
+                  aria-label={item.label}
+                  title={item.label}
+                  onClick={onNavigate}
+                  className={({ isActive }) =>
+                    `flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-gradient-to-r from-isieco-primary to-isieco-primary-light text-white shadow-md shadow-isieco-primary/20'
+                        : 'text-isieco-muted hover:bg-isieco-primary/5 hover:text-isieco-primary'
+                    }`
+                  }
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{item.label}</span>
+                </NavLink>
+              </React.Fragment>
+            );
+          })}
+        </nav>
+
+        {/* Territory Card */}
+        <div className="sidebar-territory mt-4">
+          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-isieco-primary">
+            <span className="h-2 w-2 rounded-full bg-isieco-primary shadow-sm shadow-isieco-primary/50" />
+            TERRITOIRE PILOTE
+          </div>
+          <div className="mt-1.5 pl-4 text-[12px] font-semibold text-isieco-dark">
+            Dakar-Plateau & Médina
+          </div>
+          <div className="mt-3 flex items-center gap-2 border-t border-isieco-border pt-2.5 text-[10px] text-isieco-muted">
+            <Recycle aria-hidden="true" size={13} className="text-isieco-primary" />
+            <span>Signaler · Agir · Préserver</span>
+          </div>
         </div>
-        <div className="ops-sidebar__place mt-1 pl-4 text-[11px]">Dakar-Plateau & Médina</div>
-        <div className="ops-sidebar__cycle mt-3 border-t border-isieco-border pt-2 text-[10px]">
-          <Recycle aria-hidden="true" size={13} />
-          <span>Signaler · Agir · Préserver</span>
-        </div>
-      </div>
       </aside>
     </>
   );

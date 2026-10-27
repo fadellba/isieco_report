@@ -13,6 +13,7 @@ import {
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import * as Crypto from 'expo-crypto';
+import { Feather } from '@expo/vector-icons';
 import { mobileApi } from '../../services/api.js';
 import { useOffline } from '../../context/OfflineContext.js';
 import { TypeDechetRef } from '../../types/index.js';
@@ -286,7 +287,10 @@ export const NouveauSignalementScreen: React.FC<{ navigation: any }> = ({ naviga
             {locLoading ? (
               <ActivityIndicator color={colors.onPrimary} size="small" />
             ) : (
-              <Text style={styles.gpsButtonText}>📍 Obtenir ma position GPS</Text>
+              <View style={styles.btnContentRow}>
+                <Feather name="navigation" size={15} color={colors.onPrimary} style={styles.btnIcon} />
+                <Text style={styles.gpsButtonText}>Obtenir ma position GPS</Text>
+              </View>
             )}
           </TouchableOpacity>
 
@@ -334,8 +338,12 @@ export const NouveauSignalementScreen: React.FC<{ navigation: any }> = ({ naviga
                 style={[styles.chip, isSelected && styles.chipSelected]}
                 onPress={() => toggleCategory(t.idTypeDechet)}
               >
+                {isSelected ? (
+                  <Feather name="check" size={13} color={colors.primary} style={{ marginRight: 5 }} />
+                ) : (
+                  <Feather name="plus" size={13} color={colors.textSecondary} style={{ marginRight: 5 }} />
+                )}
                 <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
-                  {isSelected ? '✓ ' : '+ '}
                   {t.libelle}
                 </Text>
               </TouchableOpacity>
@@ -354,16 +362,19 @@ export const NouveauSignalementScreen: React.FC<{ navigation: any }> = ({ naviga
               style={styles.removePhotoBtn}
               onPress={() => setPhotoUri(null)}
             >
-              <Text style={styles.removePhotoText}>✕ Supprimer</Text>
+              <Feather name="trash-2" size={14} color={colors.danger} style={{ marginRight: 6 }} />
+              <Text style={styles.removePhotoText}>Supprimer</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View style={styles.photoActionsRow}>
             <TouchableOpacity style={styles.photoBtn} onPress={handleTakePhoto}>
-              <Text style={styles.photoBtnText}>📷 Prendre Photo</Text>
+              <Feather name="camera" size={16} color={colors.primary} style={styles.btnIcon} />
+              <Text style={styles.photoBtnText}>Prendre Photo</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.photoBtn} onPress={handlePickImage}>
-              <Text style={styles.photoBtnText}>🖼 Choisir Galerie</Text>
+              <Feather name="image" size={16} color={colors.primary} style={styles.btnIcon} />
+              <Text style={styles.photoBtnText}>Choisir Galerie</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -378,9 +389,17 @@ export const NouveauSignalementScreen: React.FC<{ navigation: any }> = ({ naviga
         {submitting ? (
           <ActivityIndicator color={colors.onPrimary} />
         ) : (
-          <Text style={styles.submitBtnText}>
-            {isOnline ? '🚀 Transmettre le Signalement' : '💾 Sauvegarder (Mode Hors-Ligne)'}
-          </Text>
+          <View style={styles.btnContentRow}>
+            <Feather
+              name={isOnline ? 'send' : 'save'}
+              size={16}
+              color={colors.onPrimary}
+              style={styles.btnIcon}
+            />
+            <Text style={styles.submitBtnText}>
+              {isOnline ? 'Transmettre le Signalement' : 'Sauvegarder (Mode Hors-Ligne)'}
+            </Text>
+          </View>
         )}
       </TouchableOpacity>
     </ScrollView>
@@ -569,6 +588,14 @@ const createStyles = (colors: DesignTokens) => StyleSheet.create({
     color: colors.danger,
     fontSize: 11,
     fontWeight: '700',
+  },
+  btnContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnIcon: {
+    marginRight: 8,
   },
   submitBtn: {
     backgroundColor: colors.primary,

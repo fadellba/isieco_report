@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { mobileApi } from '../../services/api.js';
 import { useOffline } from '../../context/OfflineContext.js';
 import { SignalementItem } from '../../types/index.js';
@@ -67,9 +68,12 @@ export const MesSignalementsScreen: React.FC<{ navigation: any }> = ({ navigatio
       {pendingCount > 0 && (
         <View style={styles.offlineBanner}>
           <View style={styles.offlineTextCol}>
-            <Text style={styles.offlineTitle}>
-              💾 {pendingCount} signalement(s) en attente hors-ligne
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+              <Feather name="cloud-off" size={15} color={colors.warning} style={{ marginRight: 6 }} />
+              <Text style={styles.offlineTitle}>
+                {pendingCount} signalement(s) en attente hors-ligne
+              </Text>
+            </View>
             <Text style={styles.offlineSubtitle}>
               {isOnline
                 ? 'Connexion rétablie. Vous pouvez synchroniser maintenant.'
@@ -94,7 +98,10 @@ export const MesSignalementsScreen: React.FC<{ navigation: any }> = ({ navigatio
               {syncing ? (
                 <ActivityIndicator color={colors.warning} size="small" />
               ) : (
-                <Text style={styles.syncBtnText}>Synchroniser</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Feather name="refresh-cw" size={13} color={colors.warning} style={{ marginRight: 5 }} />
+                  <Text style={styles.syncBtnText}>Synchroniser</Text>
+                </View>
               )}
             </TouchableOpacity>
           )}
@@ -116,7 +123,9 @@ export const MesSignalementsScreen: React.FC<{ navigation: any }> = ({ navigatio
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyEmoji}>🌱</Text>
+              <View style={styles.emptyIconCircle}>
+                <Feather name="inbox" size={32} color={colors.primary} />
+              </View>
               <Text style={styles.emptyTitle}>Aucun signalement pour l instant</Text>
               <Text style={styles.emptySubtitle}>
                 Vous n avez pas encore signalé de dépôt sauvage. Contribuez à la propreté de votre quartier !
@@ -125,7 +134,10 @@ export const MesSignalementsScreen: React.FC<{ navigation: any }> = ({ navigatio
                 style={styles.createBtn}
                 onPress={() => navigation.navigate('NouveauSignalement')}
               >
-                <Text style={styles.createBtnText}>+ Signaler une anomalie</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Feather name="plus-circle" size={16} color={colors.onPrimary} style={{ marginRight: 8 }} />
+                  <Text style={styles.createBtnText}>Signaler une anomalie</Text>
+                </View>
               </TouchableOpacity>
             </View>
           }
@@ -154,9 +166,12 @@ export const MesSignalementsScreen: React.FC<{ navigation: any }> = ({ navigatio
                 </Text>
 
                 <View style={styles.itemFooter}>
-                  <Text style={styles.itemLoc}>
-                    📍 {item.descriptionLocalisation || (item.latitude ? `${item.latitude.toFixed(4)}, ${item.longitude?.toFixed(4)}` : 'Position Dakar')}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 }}>
+                    <Feather name="map-pin" size={12} color={colors.textSecondary} style={{ marginRight: 4 }} />
+                    <Text style={styles.itemLoc} numberOfLines={1}>
+                      {item.descriptionLocalisation || (item.latitude ? `${item.latitude.toFixed(4)}, ${item.longitude?.toFixed(4)}` : 'Position Dakar')}
+                    </Text>
+                  </View>
                   <Text style={styles.itemDate}>{dateStr}</Text>
                 </View>
               </View>
@@ -282,9 +297,14 @@ const createStyles = (colors: DesignTokens) => StyleSheet.create({
     paddingVertical: 60,
     paddingHorizontal: 20,
   },
-  emptyEmoji: {
-    fontSize: 48,
-    marginBottom: 12,
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.primarySubtle,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   emptyTitle: {
     fontSize: 16,

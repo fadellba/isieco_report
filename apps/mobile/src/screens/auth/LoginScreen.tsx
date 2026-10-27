@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext.js';
 import { setApiBaseUrl, getApiBaseUrl } from '../../services/api.js';
 import { useTheme } from '../../context/ThemeContext.js';
@@ -163,9 +164,12 @@ export const LoginScreen: React.FC = () => {
             style={styles.configToggle}
             onPress={() => setShowConfig(!showConfig)}
           >
-            <Text style={styles.configToggleText}>
-              {showConfig ? 'Masquer config réseau' : '⚙ Paramètres réseau (URL API)'}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+              <Feather name="settings" size={13} color={colors.textSecondary} style={{ marginRight: 6 }} />
+              <Text style={styles.configToggleText}>
+                {showConfig ? 'Masquer config réseau' : 'Paramètres réseau (URL API)'}
+              </Text>
+            </View>
           </TouchableOpacity>
 
           {showConfig && <View style={styles.configCard}>
